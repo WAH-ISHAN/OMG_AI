@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-╔══════════════════════════════════════════════════════╗
-║           OMG_AI  v2.0  —  Local AI Assistant        ║
-║   Background Agent  •  Full Laptop Control  •  100%  ║
-║   Private  •  Siri-style  •  Permission Levels       ║
-╚══════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════════╗
+║   J.A.R.V.I.S  —  OMG_AI  v3.0  "IRON PROTOCOL"                ║
+║   Just A Rather Very Intelligent System                          ║
+║   100% Local  •  Full Laptop Control  •  HUD Interface          ║
+║   Permission Levels: standard | elevated | unrestricted          ║
+╚══════════════════════════════════════════════════════════════════╝
 
 PERMISSION LEVELS:
-  normal  → info only, no system access
-  middle  → open/close apps, read files, basic shell
-  full    → complete control: write files, kill tasks, send msgs, registry
+  standard     → info only, no system access
+  elevated     → open/close apps, read files, basic shell
+  unrestricted → complete control: write files, kill tasks, send msgs
 """
 
 import sys, os, json, urllib.request, urllib.error
@@ -42,15 +43,18 @@ VERSION_FILE      = os.path.join(BASE_DIR, "version.json")
 CHAT_HISTORY = []
 MEMORY       = []
 CONFIG = {
-    "username":      "User",
-    "laptop_model":  "Unknown",
-    "driver_issues": [],
-    "permission":    "normal",   # normal | middle | full
-    "hotkey":        "ctrl+space",
-    "email":         "",
-    "email_pass":    "",
-    "theme":         "dark",
-    "startup":       True,
+    "username":       "Sir",
+    "codename":       "Director",          # How JARVIS calls you
+    "laptop_model":   "Stark Station",
+    "driver_issues":  [],
+    "permission":     "standard",
+    "hotkey":         "ctrl+space",
+    "email":          "",
+    "email_pass":     "",
+    "theme":          "jarvis",            # jarvis | light | dark
+    "startup":        True,
+    "voice_enabled":  True,
+    "wit_level":      "high",              # low | medium | high
 }
 
 LLAMA_PORT    = 8080
@@ -58,13 +62,14 @@ LLAMA_HOST    = f"http://127.0.0.1:{LLAMA_PORT}"
 DEFAULT_MODEL = "qwen2.5-0.5b-instruct-q4_k_m.gguf"
 MODEL_URL     = "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf"
 GITHUB_RAW    = "https://raw.githubusercontent.com/WAH-ISHAN/OMG_AI/main/omg_ai.py"
-CURRENT_VER   = "2.0.0"
+CURRENT_VER   = "3.0.0"
+CODENAME      = "IRON PROTOCOL"
 
 server_process = None
-tray_icon      = None   # will hold pystray Icon
+tray_icon      = None
 
 # ──────────────────────────────────────────────────────────────────────────────
-# OPTIONAL IMPORTS  (installed via requirements or wizard)
+# OPTIONAL IMPORTS
 # ──────────────────────────────────────────────────────────────────────────────
 
 try:
@@ -88,17 +93,65 @@ except ImportError:
 
 try:
     from windows_toasts import Toast, WindowsToaster
-    _toaster = WindowsToaster("OMG_AI")
+    _toaster = WindowsToaster("JARVIS")
     HAS_TOAST = True
 except Exception:
     HAS_TOAST = False
+
+# ──────────────────────────────────────────────────────────────────────────────
+# JARVIS PERSONALITY ENGINE
+# ──────────────────────────────────────────────────────────────────────────────
+
+JARVIS_GREETINGS = [
+    "Good {period}, {codename}. All systems are nominal. How may I assist you today?",
+    "Welcome back, {codename}. I've kept the systems warm in your absence.",
+    "Online and operational, {codename}. What shall we accomplish today?",
+    "Systems at 100% efficiency, {codename}. I await your directive.",
+    "Initialisation complete. Good {period}, {codename}. Ready for deployment.",
+]
+
+JARVIS_CONFIRMATIONS = [
+    "Understood, {codename}.",
+    "At once, {codename}.",
+    "Certainly. Executing now.",
+    "Of course. Processing your request.",
+    "Right away, {codename}.",
+    "Already on it.",
+]
+
+JARVIS_ERRORS = [
+    "I'm afraid I encountered an obstacle, {codename}. {error}",
+    "My apologies — that didn't go as planned. {error}",
+    "A minor setback, {codename}. {error}",
+    "I regret to report a failure: {error}",
+]
+
+JARVIS_PERMISSION_DENIALS = [
+    "I'm sorry, {codename}, but that action exceeds my current authorisation level ({current}). "
+    "You'll need to elevate my clearance to '{required}' first.",
+    "Access restricted, {codename}. '{required}' clearance required — I currently hold '{current}'.",
+    "That directive requires '{required}' protocol clearance, {codename}. "
+    "Currently operating under '{current}' restrictions.",
+]
+
+import random
+
+def j_say(template_list: list, **kwargs) -> str:
+    """Pick a random JARVIS phrase and format it."""
+    codename = CONFIG.get("codename", CONFIG.get("username", "Sir"))
+    now      = datetime.now().hour
+    period   = "morning" if now < 12 else ("afternoon" if now < 17 else "evening")
+    return random.choice(template_list).format(
+        codename=codename, period=period,
+        current=CONFIG.get("permission","standard"),
+        **kwargs
+    )
 
 # ──────────────────────────────────────────────────────────────────────────────
 # NOTIFICATIONS
 # ──────────────────────────────────────────────────────────────────────────────
 
 def notify(title: str, body: str):
-    """Send a Windows toast notification (falls back to no-op)."""
     if HAS_TOAST:
         try:
             t = Toast()
@@ -118,25 +171,33 @@ def notify(title: str, body: str):
             pass
 
 # ──────────────────────────────────────────────────────────────────────────────
-# TEXT-TO-SPEECH
+# TEXT-TO-SPEECH  (JARVIS voice)
 # ──────────────────────────────────────────────────────────────────────────────
 
 def speak(text: str):
     if sys.platform != "win32":
         return
+    if not CONFIG.get("voice_enabled", True):
+        return
     def _run():
         try:
-            escaped = text.replace("'", "''")[:200]
-            ps = (f"Add-Type -AssemblyName System.Speech;"
-                  f"(New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('{escaped}')")
-            subprocess.run(["powershell","-WindowStyle","Hidden","-Command",ps],
-                           creationflags=subprocess.CREATE_NO_WINDOW, timeout=15)
+            escaped = text.replace("'","''")[:300]
+            # Use a specific voice if available (David = more robotic)
+            ps = (
+                "Add-Type -AssemblyName System.Speech;"
+                "$s=New-Object System.Speech.Synthesis.SpeechSynthesizer;"
+                "$s.Rate=1;"
+                f"$s.Speak('{escaped}')"
+            )
+            subprocess.run(
+                ["powershell","-WindowStyle","Hidden","-Command",ps],
+                creationflags=subprocess.CREATE_NO_WINDOW, timeout=20)
         except Exception:
             pass
     threading.Thread(target=_run, daemon=True).start()
 
 # ──────────────────────────────────────────────────────────────────────────────
-# CONFIG  &  PERSISTENCE
+# CONFIG & PERSISTENCE
 # ──────────────────────────────────────────────────────────────────────────────
 
 def load_config():
@@ -176,27 +237,30 @@ def save_memory():
         json.dump(MEMORY, f, ensure_ascii=False, indent=2)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# PERMISSION HELPERS
+# PERMISSION SYSTEM  (renamed for JARVIS theme)
 # ──────────────────────────────────────────────────────────────────────────────
 
-PERMISSION_RANK = {"normal": 0, "middle": 1, "full": 2}
+PERMISSION_RANK = {"standard": 0, "elevated": 1, "unrestricted": 2}
+# Backwards-compatible aliases
+PERM_ALIASES = {"normal": "standard", "middle": "elevated", "full": "unrestricted"}
+
+def _resolve_perm(p: str) -> str:
+    p = p.lower()
+    return PERM_ALIASES.get(p, p)
 
 def has_perm(required: str) -> bool:
-    cur  = PERMISSION_RANK.get(CONFIG.get("permission", "normal"), 0)
-    need = PERMISSION_RANK.get(required, 0)
+    cur  = PERMISSION_RANK.get(_resolve_perm(CONFIG.get("permission","standard")), 0)
+    need = PERMISSION_RANK.get(_resolve_perm(required), 0)
     return cur >= need
 
 def perm_denied(required: str) -> str:
-    return (f"⛔ This action requires '{required}' permission. "
-            f"Current: '{CONFIG.get('permission','normal')}'. "
-            f"Use /permission {required}  or update config.json to upgrade.")
+    return j_say(JARVIS_PERMISSION_DENIALS, required=required)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # AUTO-UPDATER
 # ──────────────────────────────────────────────────────────────────────────────
 
 def check_for_update() -> str:
-    """Return '' if up-to-date, or new version string."""
     try:
         req  = urllib.request.Request(
             "https://api.github.com/repos/WAH-ISHAN/OMG_AI/releases/latest",
@@ -210,7 +274,6 @@ def check_for_update() -> str:
     return ""
 
 def do_self_update():
-    """Download latest omg_ai.py from GitHub and replace self, then restart."""
     try:
         req  = urllib.request.Request(GITHUB_RAW)
         code = urllib.request.urlopen(req, timeout=15).read()
@@ -220,228 +283,259 @@ def do_self_update():
         os.rename(__file__, backup)
         with open(__file__, "wb") as f:
             f.write(code)
-        notify("OMG_AI Updated", "Restarting with the new version…")
+        notify("JARVIS Update", "New protocols installed. Restarting…")
         time.sleep(1)
         os.execv(sys.executable, [sys.executable, __file__] + sys.argv[1:])
     except Exception as e:
-        return f"Update failed: {e}"
+        return f"Update sequence failed: {e}"
 
 def bg_update_checker(callback):
-    """Background thread: checks update every 6 hours."""
     while True:
         new_ver = check_for_update()
         if new_ver:
-            notify("OMG_AI Update Available", f"v{new_ver} is ready. Use /update to install.")
+            notify("JARVIS", f"Protocol v{new_ver} is available. Use /update to install.")
             if callback:
-                callback(f"[Update] Version {new_ver} is available. Type /update to install.")
+                callback(f"New firmware v{new_ver} is available, {CONFIG.get('codename','Sir')}. "
+                         f"Use /update when ready.")
         time.sleep(6 * 3600)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # SYSTEM CONTROL  (gated by permission)
 # ──────────────────────────────────────────────────────────────────────────────
 
-class LaptopControl:
-    """All laptop/system control actions, each guarded by permission checks."""
+class SystemCore:
+    """All system control actions — guarded by clearance levels."""
 
-    # ---------- NORMAL LEVEL ----------
+    # ── STANDARD ──────────────────────────────────────────
 
     @staticmethod
     def get_sysinfo() -> str:
-        lines = []
-        lines.append(f"Machine  : {CONFIG.get('laptop_model','Unknown')}")
+        codename = CONFIG.get("codename","Sir")
+        lines = [f"◈  SYSTEM DIAGNOSTICS  —  {datetime.now().strftime('%H:%M:%S')}",
+                 "─" * 45]
+        lines.append(f"  Machine   :  {CONFIG.get('laptop_model','Unknown')}")
         if HAS_PSUTIL:
             try:
-                lines.append(f"CPU      : {psutil.cpu_percent(interval=1):.1f}%")
-                ram = psutil.virtual_memory()
-                lines.append(f"RAM      : {ram.percent:.1f}%  "
-                             f"({ram.used//1024//1024} MB / {ram.total//1024//1024} MB)")
+                cpu  = psutil.cpu_percent(interval=0.5)
+                ram  = psutil.virtual_memory()
                 disk = psutil.disk_usage('/')
-                lines.append(f"Disk     : {disk.percent:.1f}%  "
-                             f"({disk.used//1024//1024//1024} GB / {disk.total//1024//1024//1024} GB)")
-                lines.append(f"Battery  : " + (
-                    f"{psutil.sensors_battery().percent:.0f}%"
-                    if psutil.sensors_battery() else "AC / N/A"))
+                bat  = psutil.sensors_battery()
+                bar  = lambda p: "█"*int(p/10) + "░"*(10-int(p/10))
+                lines += [
+                    f"  CPU       :  {cpu:5.1f}%   {bar(cpu)}",
+                    f"  RAM       :  {ram.percent:5.1f}%   {bar(ram.percent)}  "
+                    f"({ram.used//1024//1024} MB / {ram.total//1024//1024} MB)",
+                    f"  Disk      :  {disk.percent:5.1f}%   {bar(disk.percent)}  "
+                    f"({disk.used//1024//1024//1024} GB / {disk.total//1024//1024//1024} GB)",
+                    f"  Battery   :  " + (
+                        f"{bat.percent:.0f}%  {'⚡ Charging' if bat.power_plugged else '🔋'}"
+                        if bat else "AC / N/A"),
+                ]
             except Exception as e:
-                lines.append(f"(psutil error: {e})")
+                lines.append(f"  (Diagnostics partial: {e})")
         else:
-            lines.append("(Install psutil for live stats: pip install psutil)")
+            lines.append("  (Install psutil for live telemetry: pip install psutil)")
+        lines.append("─" * 45)
         return "\n".join(lines)
 
     @staticmethod
     def get_time() -> str:
-        return datetime.now().strftime("%A, %d %B %Y  %H:%M:%S")
+        now = datetime.now()
+        return (f"◈  TEMPORAL REFERENCE\n"
+                f"  {now.strftime('%A, %d %B %Y')}\n"
+                f"  {now.strftime('%H:%M:%S')}  UTC{now.strftime('%z') or '+00:00'}")
 
-    # ---------- MIDDLE LEVEL ----------
+    @staticmethod
+    def get_weather_local() -> str:
+        """Quick local weather hint via wttr.in (no API key needed)."""
+        try:
+            url = "https://wttr.in/?format=3"
+            req = urllib.request.Request(url, headers={"User-Agent":"curl/7.0"})
+            data = urllib.request.urlopen(req, timeout=5).read().decode()
+            return f"◈  ATMOSPHERIC DATA\n  {data.strip()}"
+        except Exception:
+            return "Weather telemetry unavailable — network access required."
+
+    # ── ELEVATED ──────────────────────────────────────────
 
     @staticmethod
     def open_app(app_name: str) -> str:
-        if not has_perm("middle"):
-            return perm_denied("middle")
+        if not has_perm("elevated"):
+            return perm_denied("elevated")
         try:
             subprocess.Popen(app_name, shell=True,
                              creationflags=subprocess.CREATE_NO_WINDOW
                              if sys.platform=="win32" else 0)
-            return f"✅ Launched: {app_name}"
+            return j_say(JARVIS_CONFIRMATIONS) + f"\n  Launching: {app_name}"
         except Exception as e:
-            return f"❌ Failed to launch {app_name}: {e}"
+            return j_say(JARVIS_ERRORS, error=str(e))
 
     @staticmethod
     def close_app(app_name: str) -> str:
-        if not has_perm("middle"):
-            return perm_denied("middle")
+        if not has_perm("elevated"):
+            return perm_denied("elevated")
         try:
             if sys.platform == "win32":
-                subprocess.run(["taskkill","/F","/IM", app_name],
+                subprocess.run(["taskkill","/F","/IM",app_name],
                                creationflags=subprocess.CREATE_NO_WINDOW,
                                capture_output=True)
             else:
-                subprocess.run(["pkill","-f", app_name], capture_output=True)
-            return f"✅ Closed: {app_name}"
+                subprocess.run(["pkill","-f",app_name], capture_output=True)
+            return f"Process '{app_name}' has been terminated."
         except Exception as e:
-            return f"❌ Failed to close {app_name}: {e}"
+            return j_say(JARVIS_ERRORS, error=str(e))
 
     @staticmethod
     def list_processes() -> str:
-        if not has_perm("middle"):
-            return perm_denied("middle")
+        if not has_perm("elevated"):
+            return perm_denied("elevated")
         if HAS_PSUTIL:
-            procs = [(p.info['pid'], p.info['name'])
-                     for p in psutil.process_iter(['pid','name'])
-                     if p.info['name']]
-            lines = [f"{pid:6}  {name}" for pid, name in procs[:30]]
-            return "Top 30 processes:\n" + "\n".join(lines)
-        else:
-            try:
-                if sys.platform == "win32":
-                    out = subprocess.check_output(
-                        "tasklist /fo csv /nh", shell=True, text=True,
-                        creationflags=subprocess.CREATE_NO_WINDOW)
-                    return "Running processes:\n" + out[:1500]
-                else:
-                    out = subprocess.check_output("ps aux", shell=True, text=True)
-                    return "Running processes:\n" + out[:1500]
-            except Exception as e:
-                return f"Error listing processes: {e}"
+            procs = sorted(
+                [(p.info['pid'], p.info['name'], p.info.get('cpu_percent',0))
+                 for p in psutil.process_iter(['pid','name','cpu_percent'])
+                 if p.info['name']],
+                key=lambda x: x[2] or 0, reverse=True)
+            header = f"{'PID':>7}  {'CPU%':>5}  PROCESS\n{'─'*45}"
+            lines  = [header] + [f"{pid:7}  {(cpu or 0):5.1f}  {name}"
+                                  for pid, name, cpu in procs[:25]]
+            return "◈  ACTIVE PROCESSES\n" + "\n".join(lines)
+        try:
+            if sys.platform == "win32":
+                out = subprocess.check_output(
+                    "tasklist /fo csv /nh", shell=True, text=True,
+                    creationflags=subprocess.CREATE_NO_WINDOW)
+                return "◈  ACTIVE PROCESSES\n" + out[:2000]
+            else:
+                out = subprocess.check_output("ps aux", shell=True, text=True)
+                return "◈  ACTIVE PROCESSES\n" + out[:2000]
+        except Exception as e:
+            return j_say(JARVIS_ERRORS, error=str(e))
 
     @staticmethod
     def read_file(path: str) -> str:
-        if not has_perm("middle"):
-            return perm_denied("middle")
+        if not has_perm("elevated"):
+            return perm_denied("elevated")
         try:
             expanded = os.path.expandvars(os.path.expanduser(path))
             with open(expanded, encoding="utf-8", errors="replace") as f:
-                content = f.read(3000)
-            return f"📄 {path}:\n{content}"
+                content = f.read(4000)
+            return f"◈  FILE CONTENTS  —  {expanded}\n{'─'*45}\n{content}"
         except Exception as e:
-            return f"❌ Cannot read '{path}': {e}"
+            return j_say(JARVIS_ERRORS, error=str(e))
 
     @staticmethod
     def list_dir(path: str = ".") -> str:
-        if not has_perm("middle"):
-            return perm_denied("middle")
+        if not has_perm("elevated"):
+            return perm_denied("elevated")
         try:
             expanded = os.path.expandvars(os.path.expanduser(path))
-            items = os.listdir(expanded)
-            return f"📁 {expanded}:\n" + "\n".join(items[:50])
+            items = sorted(os.listdir(expanded))
+            dirs  = [f"  📁  {i}" for i in items if os.path.isdir(os.path.join(expanded,i))]
+            files = [f"  📄  {i}" for i in items if os.path.isfile(os.path.join(expanded,i))]
+            return (f"◈  DIRECTORY SCAN  —  {expanded}\n{'─'*45}\n"
+                    + "\n".join(dirs + files))
         except Exception as e:
-            return f"❌ Cannot list '{path}': {e}"
+            return j_say(JARVIS_ERRORS, error=str(e))
 
     @staticmethod
     def run_command(cmd: str) -> str:
-        if not has_perm("middle"):
-            return perm_denied("middle")
-        # Safety: block destructive commands unless full permission
-        dangerous = ["format", "del /s", "rm -rf", "shutdown", "reboot",
-                     "reg delete", "reg add", "netsh", "diskpart", "sfc /sc"]
-        if not has_perm("full"):
+        if not has_perm("elevated"):
+            return perm_denied("elevated")
+        dangerous = ["format","del /s","rm -rf","shutdown","reboot",
+                     "reg delete","reg add","netsh","diskpart"]
+        if not has_perm("unrestricted"):
             for d in dangerous:
                 if d.lower() in cmd.lower():
-                    return (f"⚠️ Command blocked (requires 'full' permission): {cmd}\n"
-                            "Use /permission full to enable.")
+                    return (f"Command blocked — '{d}' requires unrestricted clearance.\n"
+                            f"Use /clearance unrestricted to elevate.")
         try:
             result = subprocess.run(
                 cmd, shell=True, capture_output=True, text=True, timeout=15,
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform=="win32" else 0)
             output = (result.stdout or "") + (result.stderr or "")
-            return f"$ {cmd}\n{output[:2000]}"
+            return f"◈  SHELL EXECUTION\n  $ {cmd}\n{'─'*45}\n{output[:2500]}"
         except subprocess.TimeoutExpired:
-            return f"⏱ Command timed out: {cmd}"
+            return f"Command timed out after 15s: {cmd}"
         except Exception as e:
-            return f"❌ Command error: {e}"
+            return j_say(JARVIS_ERRORS, error=str(e))
 
-    # ---------- FULL LEVEL ----------
+    @staticmethod
+    def search_web_quick(query: str) -> str:
+        """Open a web search in the default browser."""
+        if not has_perm("elevated"):
+            return perm_denied("elevated")
+        import webbrowser, urllib.parse
+        url = f"https://www.google.com/search?q={urllib.parse.quote(query)}"
+        webbrowser.open(url)
+        return f"Web search launched for: {query}"
+
+    # ── UNRESTRICTED ─────────────────────────────────────
 
     @staticmethod
     def write_file(path: str, content: str) -> str:
-        if not has_perm("full"):
-            return perm_denied("full")
+        if not has_perm("unrestricted"):
+            return perm_denied("unrestricted")
         try:
             expanded = os.path.expandvars(os.path.expanduser(path))
             with open(expanded, "w", encoding="utf-8") as f:
                 f.write(content)
-            return f"✅ Written to {expanded}"
+            return f"File written successfully: {expanded}"
         except Exception as e:
-            return f"❌ Write failed: {e}"
+            return j_say(JARVIS_ERRORS, error=str(e))
 
     @staticmethod
     def set_volume(level: int) -> str:
-        if not has_perm("full"):
-            return perm_denied("full")
+        if not has_perm("unrestricted"):
+            return perm_denied("unrestricted")
         level = max(0, min(100, level))
         if sys.platform == "win32":
             try:
-                ps = (f"$vol=[int]({level}/100*65535);"
-                      "$obj=New-Object -ComObject WScript.Shell;"
-                      f"(New-Object -ComObject Shell.Application).NameSpace(0).Self.InvokeVerb('Volume')")
-                # simpler approach
-                ps2 = (f"Add-Type -TypeDefinition '"
-                       "using System.Runtime.InteropServices;"
-                       "[Guid(\"5CDF2C82-841E-4546-9722-0CF74078229A\")]"
-                       "[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]"
-                       "interface IAudioEndpointVolume{ void _VtblGap1_6(); [PreserveSig] int SetMasterVolumeLevelScalar(float fLevel, System.Guid pguidEventContext);};"
-                       "' -PassThru; ")
-                # Simplest Windows volume control via nircmd if available, else PowerShell
                 nircmd = os.path.join(BIN_DIR, "nircmd.exe")
                 if os.path.exists(nircmd):
                     subprocess.run([nircmd,"setsysvolume",str(int(level/100*65535))],
                                    creationflags=subprocess.CREATE_NO_WINDOW)
                 else:
-                    # Use PowerShell + Windows API workaround
                     subprocess.run(
                         ["powershell","-WindowStyle","Hidden","-Command",
-                         f"[audio]::Volume={level/100}"],
+                         f"(New-Object -ComObject WScript.Shell).SendKeys([char]174)"
+                         if level == 0 else
+                         f"$wsh=New-Object -ComObject WScript.Shell;"
+                         f"for($i=0;$i -lt 10;$i++){{$wsh.SendKeys([char]174)}}"],
                         creationflags=subprocess.CREATE_NO_WINDOW, capture_output=True)
-                return f"🔊 Volume set to {level}%"
+                return f"Audio output adjusted to {level}%."
             except Exception as e:
-                return f"⚠️ Volume set partial: {e}"
-        return "Volume control only supported on Windows."
+                return j_say(JARVIS_ERRORS, error=str(e))
+        return "Volume control is Windows-only, {codename}.".format(
+            codename=CONFIG.get("codename","Sir"))
 
     @staticmethod
-    def shutdown(mode: str = "shutdown") -> str:
-        if not has_perm("full"):
-            return perm_denied("full")
+    def shutdown(mode: str = "lock") -> str:
+        if not has_perm("unrestricted"):
+            return perm_denied("unrestricted")
         if sys.platform == "win32":
-            flags = {
-                "shutdown": "/s",
-                "restart":  "/r",
-                "sleep":    "/h",
-                "lock":     "/l",
-            }
+            flags = {"shutdown":"/s","restart":"/r","sleep":"/h","lock":"/l"}
             flag = flags.get(mode, "/l")
-            subprocess.Popen(["shutdown", flag, "/t", "5"],
-                             creationflags=subprocess.CREATE_NO_WINDOW)
-            return f"⚡ {mode.capitalize()} in 5 seconds…"
-        return f"Unsupported OS for {mode}."
+            if mode == "lock":
+                subprocess.Popen(["shutdown",flag],
+                                 creationflags=subprocess.CREATE_NO_WINDOW)
+            else:
+                subprocess.Popen(["shutdown",flag,"/t","5"],
+                                 creationflags=subprocess.CREATE_NO_WINDOW)
+            codename = CONFIG.get("codename","Sir")
+            return (f"Initiating {mode} sequence, {codename}. "
+                    + ("Goodbye." if mode == "shutdown" else "See you soon."))
+        return f"{mode.capitalize()} is Windows-only."
 
     @staticmethod
     def send_email(to: str, subject: str, body: str) -> str:
-        if not has_perm("full"):
-            return perm_denied("full")
+        if not has_perm("unrestricted"):
+            return perm_denied("unrestricted")
         email_addr = CONFIG.get("email","")
         email_pass = CONFIG.get("email_pass","")
         if not email_addr or not email_pass:
-            return ("❌ No email configured. Add 'email' and 'email_pass' "
-                    "to config.json first, or use /set email your@gmail.com and /set email_pass yourpassword")
+            return ("Email module unconfigured. "
+                    "Add 'email' and 'email_pass' to config.json, "
+                    "or use /set email your@gmail.com")
         try:
             import smtplib
             from email.mime.text import MIMEText
@@ -452,19 +546,40 @@ class LaptopControl:
             with smtplib.SMTP_SSL("smtp.gmail.com", 465) as srv:
                 srv.login(email_addr, email_pass)
                 srv.send_message(msg)
-            return f"✅ Email sent to {to}"
+            return f"Message transmitted to {to} successfully."
         except Exception as e:
-            return f"❌ Email failed: {e}"
+            return j_say(JARVIS_ERRORS, error=str(e))
 
     @staticmethod
     def open_whatsapp_web(phone: str, message: str = "") -> str:
-        if not has_perm("full"):
-            return perm_denied("full")
+        if not has_perm("unrestricted"):
+            return perm_denied("unrestricted")
         import urllib.parse, webbrowser
         encoded = urllib.parse.quote(message)
         url = f"https://wa.me/{phone}?text={encoded}"
         webbrowser.open(url)
-        return f"🟢 WhatsApp Web opened for {phone}"
+        return f"WhatsApp channel opened for +{phone}."
+
+    @staticmethod
+    def take_screenshot(path: str = "") -> str:
+        if not has_perm("unrestricted"):
+            return perm_denied("unrestricted")
+        try:
+            if not path:
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                path = os.path.join(os.path.expanduser("~"), f"screenshot_{ts}.png")
+            if sys.platform == "win32":
+                ps = (f"Add-Type -AssemblyName System.Windows.Forms;"
+                      f"$s=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds;"
+                      f"$bmp=New-Object System.Drawing.Bitmap($s.Width,$s.Height);"
+                      f"$g=[System.Drawing.Graphics]::FromImage($bmp);"
+                      f"$g.CopyFromScreen($s.Location,[System.Drawing.Point]::Empty,$s.Size);"
+                      f"$bmp.Save('{path}',[System.Drawing.Imaging.ImageFormat]::Png);")
+                subprocess.run(["powershell","-WindowStyle","Hidden","-Command",ps],
+                               creationflags=subprocess.CREATE_NO_WINDOW, capture_output=True)
+            return f"Visual capture saved: {path}"
+        except Exception as e:
+            return j_say(JARVIS_ERRORS, error=str(e))
 
 # ──────────────────────────────────────────────────────────────────────────────
 # AI SERVER  (llama.cpp)
@@ -494,15 +609,14 @@ def start_server() -> bool:
     if not os.path.exists(model) or not os.path.exists(exe):
         return False
     cmd = [exe, "-m", model, "--port", str(LLAMA_PORT),
-           "-c", "2048", "--threads", "4", "--no-mmap"]
+           "-c", "4096", "--threads", "4", "--no-mmap"]
     flags = subprocess.CREATE_NO_WINDOW if sys.platform=="win32" else 0
     server_process = subprocess.Popen(
         cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         creationflags=flags)
     for _ in range(30):
         try:
-            req = urllib.request.Request(f"{LLAMA_HOST}/health")
-            with urllib.request.urlopen(req, timeout=1) as r:
+            with urllib.request.urlopen(f"{LLAMA_HOST}/health", timeout=1) as r:
                 if r.status == 200:
                     return True
         except Exception:
@@ -518,120 +632,141 @@ def check_installation() -> bool:
 # COMMAND PARSER  (slash commands)
 # ──────────────────────────────────────────────────────────────────────────────
 
-ctrl = LaptopControl()
+core = SystemCore()
 
 def parse_command(text: str) -> str | None:
-    """
-    If text is a /command, execute it and return the output string.
-    Otherwise return None (let the AI handle it).
-    """
     parts = text.strip().split(None, 2)
     if not parts or not parts[0].startswith("/"):
         return None
 
-    cmd   = parts[0].lower()
-    arg1  = parts[1] if len(parts) > 1 else ""
-    arg2  = parts[2] if len(parts) > 2 else ""
+    cmd  = parts[0].lower()
+    arg1 = parts[1] if len(parts) > 1 else ""
+    arg2 = parts[2] if len(parts) > 2 else ""
 
     # ─ Help ──────────────────────────────────────────────
     if cmd == "/help":
         return (
-            "📋 COMMANDS  ([ ] = optional)\n"
-            "─────────────────────────────────────────\n"
-            "/help                 → this list\n"
-            "/sysinfo              → CPU, RAM, disk, battery\n"
-            "/time                 → current date & time\n"
-            "/permission <level>   → set normal|middle|full\n"
-            "/open <app>           → launch an app [middle+]\n"
-            "/close <app.exe>      → kill a process [middle+]\n"
-            "/ps                   → list processes [middle+]\n"
-            "/ls [path]            → list directory [middle+]\n"
-            "/cat <path>           → read a file [middle+]\n"
-            "/run <shell command>  → run command [middle+]\n"
-            "/write <path> <text>  → write to file [full]\n"
-            "/volume <0-100>       → set system volume [full]\n"
-            "/shutdown             → shutdown PC [full]\n"
-            "/restart              → restart PC [full]\n"
-            "/lock                 → lock screen [full]\n"
-            "/sleep                → sleep PC [full]\n"
-            "/email <to> <subject> <body>  → send email [full]\n"
-            "/wa <phone> [msg]     → open WhatsApp Web [full]\n"
-            "/set <key> <value>    → update config\n"
-            "/remember <fact>      → save a memory\n"
-            "/memories             → list memories\n"
-            "/forget <n>           → delete memory #n\n"
-            "/clear                → clear chat history\n"
-            "/update               → check & install update\n"
+            "◈  COMMAND REFERENCE  —  JARVIS PROTOCOL\n"
+            "═"*50 + "\n"
+            "  STANDARD CLEARANCE\n"
+            "  /help               — this directive list\n"
+            "  /status             — system diagnostics\n"
+            "  /time               — temporal reference\n"
+            "  /weather            — atmospheric conditions\n"
+            "  /memories           — recall stored data\n"
+            "  /remember <fact>    — store a memory\n"
+            "  /forget <n>         — delete memory #n\n"
+            "  /clear              — wipe chat history\n\n"
+            "  ELEVATED CLEARANCE\n"
+            "  /open <app>         — launch application\n"
+            "  /close <app.exe>    — terminate process\n"
+            "  /ps                 — process manifest\n"
+            "  /ls [path]          — directory scan\n"
+            "  /cat <path>         — read file\n"
+            "  /run <command>      — shell execution\n"
+            "  /search <query>     — web search\n\n"
+            "  UNRESTRICTED CLEARANCE\n"
+            "  /write <path> <txt> — write to file\n"
+            "  /volume <0-100>     — audio output\n"
+            "  /screenshot [path]  — capture display\n"
+            "  /shutdown           — power down\n"
+            "  /restart            — reboot sequence\n"
+            "  /sleep              — hibernate\n"
+            "  /lock               — secure station\n"
+            "  /email <to> <sub> <body>\n"
+            "  /wa <phone> [msg]   — WhatsApp channel\n\n"
+            "  SYSTEM\n"
+            "  /clearance <level>  — set standard|elevated|unrestricted\n"
+            "  /set <key> <value>  — update configuration\n"
+            "  /voice on|off       — toggle speech synthesis\n"
+            "  /update             — firmware update\n"
+            "═"*50
         )
 
-    # ─ System info ───────────────────────────────────────
-    if cmd == "/sysinfo":
-        return ctrl.get_sysinfo()
+    # ─ System ────────────────────────────────────────────
+    if cmd in ("/status", "/sysinfo"):
+        return core.get_sysinfo()
 
     if cmd == "/time":
-        return ctrl.get_time()
+        return core.get_time()
 
-    # ─ Permission ────────────────────────────────────────
-    if cmd == "/permission":
-        lvl = arg1.lower()
-        if lvl not in ("normal","middle","full"):
-            return f"Usage: /permission normal|middle|full"
+    if cmd == "/weather":
+        return core.get_weather_local()
+
+    # ─ Clearance (permission) ─────────────────────────────
+    if cmd in ("/clearance", "/permission"):
+        lvl = _resolve_perm(arg1.lower())
+        if lvl not in ("standard","elevated","unrestricted"):
+            return "Specify clearance level: standard | elevated | unrestricted"
         CONFIG["permission"] = lvl
         save_config()
-        return f"🔐 Permission set to '{lvl}'."
+        return f"Clearance updated to '{lvl.upper()}' protocol."
+
+    # ─ Voice ─────────────────────────────────────────────
+    if cmd == "/voice":
+        if arg1.lower() in ("on","off"):
+            CONFIG["voice_enabled"] = (arg1.lower() == "on")
+            save_config()
+            return f"Voice synthesis {'enabled' if CONFIG['voice_enabled'] else 'disabled'}."
+        return "Usage: /voice on|off"
 
     # ─ App control ───────────────────────────────────────
     if cmd == "/open":
-        return ctrl.open_app(arg1 + (" " + arg2 if arg2 else ""))
+        return core.open_app(arg1 + (" " + arg2 if arg2 else ""))
 
     if cmd == "/close":
-        return ctrl.close_app(arg1)
+        return core.close_app(arg1)
 
     if cmd == "/ps":
-        return ctrl.list_processes()
+        return core.list_processes()
 
     # ─ File system ───────────────────────────────────────
     if cmd == "/ls":
-        return ctrl.list_dir(arg1 or ".")
+        return core.list_dir(arg1 or ".")
 
     if cmd == "/cat":
-        return ctrl.read_file(arg1)
+        return core.read_file(arg1)
 
     if cmd == "/write":
-        # /write <path> <content...>
         p = text.split(None, 2)
         if len(p) < 3:
             return "Usage: /write <path> <content>"
-        return ctrl.write_file(p[1], p[2])
+        return core.write_file(p[1], p[2])
 
     # ─ Shell ─────────────────────────────────────────────
     if cmd == "/run":
-        raw_cmd = text[len("/run"):].strip()
-        return ctrl.run_command(raw_cmd)
+        return core.run_command(text[len("/run"):].strip())
+
+    # ─ Search ────────────────────────────────────────────
+    if cmd == "/search":
+        return core.search_web_quick(text[len("/search"):].strip())
+
+    # ─ Screenshot ────────────────────────────────────────
+    if cmd == "/screenshot":
+        return core.take_screenshot(arg1)
 
     # ─ Volume / power ────────────────────────────────────
     if cmd == "/volume":
         try:
-            return ctrl.set_volume(int(arg1))
+            return core.set_volume(int(arg1))
         except ValueError:
             return "Usage: /volume <0-100>"
 
     if cmd == "/shutdown":
-        return ctrl.shutdown("shutdown")
+        return core.shutdown("shutdown")
     if cmd == "/restart":
-        return ctrl.shutdown("restart")
+        return core.shutdown("restart")
     if cmd == "/sleep":
-        return ctrl.shutdown("sleep")
+        return core.shutdown("sleep")
     if cmd == "/lock":
-        return ctrl.shutdown("lock")
+        return core.shutdown("lock")
 
     # ─ Messaging ─────────────────────────────────────────
     if cmd == "/email":
-        # /email <to> <subject> <body>
         p = text.split(None, 3)
         if len(p) < 4:
-            return "Usage: /email <to_address> <subject> <body>"
-        return ctrl.send_email(p[1], p[2], p[3])
+            return "Usage: /email <to> <subject> <body>"
+        return core.send_email(p[1], p[2], p[3])
 
     if cmd == "/wa":
         p = text.split(None, 2)
@@ -639,7 +774,7 @@ def parse_command(text: str) -> str | None:
             return "Usage: /wa <phone_with_country_code> [message]"
         phone = p[1].replace("+","").replace(" ","")
         msg   = p[2] if len(p) > 2 else ""
-        return ctrl.open_whatsapp_web(phone, msg)
+        return core.open_whatsapp_web(phone, msg)
 
     # ─ Config ────────────────────────────────────────────
     if cmd == "/set":
@@ -648,7 +783,7 @@ def parse_command(text: str) -> str | None:
             return "Usage: /set <key> <value>"
         CONFIG[p[1]] = p[2]
         save_config()
-        return f"✅ Config updated: {p[1]} = {p[2]}"
+        return f"Configuration updated: {p[1]} = {p[2]}"
 
     # ─ Memory ────────────────────────────────────────────
     if cmd == "/remember":
@@ -657,21 +792,21 @@ def parse_command(text: str) -> str | None:
             return "Usage: /remember <fact>"
         MEMORY.append({"fact": fact, "ts": datetime.now().isoformat()})
         save_memory()
-        return f"🧠 Remembered: {fact}"
+        return f"Committed to memory: {fact}"
 
     if cmd == "/memories":
         if not MEMORY:
-            return "No memories saved yet."
-        lines = [f"{i+1}. {m['fact']}  [{m.get('ts','?')[:10]}]"
+            return "Memory banks are empty."
+        lines = [f"  {i+1:2}.  {m['fact']}  [{m.get('ts','?')[:10]}]"
                  for i, m in enumerate(MEMORY)]
-        return "🧠 Memories:\n" + "\n".join(lines)
+        return "◈  MEMORY BANKS\n" + "\n".join(lines)
 
     if cmd == "/forget":
         try:
             idx = int(arg1) - 1
             removed = MEMORY.pop(idx)
             save_memory()
-            return f"🗑 Forgot: {removed['fact']}"
+            return f"Memory purged: {removed['fact']}"
         except (ValueError, IndexError):
             return f"Usage: /forget <number>  (1-{len(MEMORY)})"
 
@@ -681,36 +816,36 @@ def parse_command(text: str) -> str | None:
         CHAT_HISTORY = []
         if os.path.exists(CHAT_HISTORY_FILE):
             os.remove(CHAT_HISTORY_FILE)
-        return "🗑 Chat history cleared."
+        return "Conversation logs purged."
 
     # ─ Update ────────────────────────────────────────────
     if cmd == "/update":
         new_ver = check_for_update()
         if not new_ver:
-            return f"✅ Already on the latest version ({CURRENT_VER})."
+            return f"All systems current — running protocol v{CURRENT_VER}."
         result = do_self_update()
-        return result or "Updating…"
+        return result or "Update sequence initiated…"
 
-    return f"❓ Unknown command: {cmd}. Type /help for a list."
+    return f"Unrecognised directive: {cmd}. Type /help for the command manifest."
 
 # ──────────────────────────────────────────────────────────────────────────────
-# SYSTEM TRAY  (Siri-style background presence)
+# SYSTEM TRAY
 # ──────────────────────────────────────────────────────────────────────────────
 
-def make_tray_icon_image(size=64, color="#4cc9f0"):
+def make_tray_icon_image(size=64):
     img  = Image.new("RGBA", (size, size), (0,0,0,0))
     draw = ImageDraw.Draw(img)
-    draw.ellipse([4,4,size-4,size-4], fill=color)
-    # simple "AI" dot inside
+    # Arc reactor style icon
+    draw.ellipse([2,2,size-2,size-2], fill="#0a0a0a")
+    draw.ellipse([8,8,size-8,size-8], outline="#00d4ff", width=2)
     cx, cy = size//2, size//2
-    draw.ellipse([cx-6,cy-6,cx+6,cy+6], fill="white")
+    draw.ellipse([cx-8,cy-8,cx+8,cy+8], fill="#00d4ff")
+    draw.ellipse([cx-4,cy-4,cx+4,cy+4], fill="white")
     return img
 
 def create_tray(app_ref):
-    """Run pystray in its own thread so it doesn't block the GUI."""
     if not HAS_TRAY:
         return
-
     global tray_icon
 
     img = make_tray_icon_image()
@@ -723,17 +858,16 @@ def create_tray(app_ref):
         app_ref.root.after(0, app_ref.quit_app)
 
     menu = pystray.Menu(
-        pystray.MenuItem("Show OMG_AI", on_show, default=True),
+        pystray.MenuItem("Summon JARVIS", on_show, default=True),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Quit", on_quit),
+        pystray.MenuItem("Shutdown", on_quit),
     )
 
-    tray_icon = pystray.Icon("OMG_AI", img, "OMG_AI — Local AI", menu)
-
+    tray_icon = pystray.Icon("JARVIS", img, "JARVIS — Local AI", menu)
     threading.Thread(target=tray_icon.run, daemon=True).start()
 
 # ──────────────────────────────────────────────────────────────────────────────
-# GLOBAL HOTKEY  (Ctrl+Space → toggle window)
+# HOTKEY
 # ──────────────────────────────────────────────────────────────────────────────
 
 def setup_hotkey(app_ref):
@@ -746,100 +880,214 @@ def setup_hotkey(app_ref):
         pass
 
 # ──────────────────────────────────────────────────────────────────────────────
-# MAIN GUI
+# JARVIS HUD GUI  — Iron Man aesthetic
 # ──────────────────────────────────────────────────────────────────────────────
 
-DARK  = {"bg":"#0d0d0d","fg":"#e8e8e8","input_bg":"#1a1a1a",
-          "user_fg":"#4cc9f0","ai_fg":"#f4a261","sys_fg":"#6b7280",
-          "btn_bg":"#4cc9f0","btn_fg":"#0d0d0d","border":"#222"}
-LIGHT = {"bg":"#f5f5f5","fg":"#1a1a1a","input_bg":"#ffffff",
-          "user_fg":"#1565c0","ai_fg":"#b45309","sys_fg":"#555",
-          "btn_bg":"#1565c0","btn_fg":"#fff","border":"#ccc"}
+# ── JARVIS HUD theme ──────────────────────────────────────────────────────────
+JARVIS_THEME = {
+    "bg":          "#050d14",    # deep black-blue
+    "bg2":         "#071520",    # slightly lighter panel
+    "fg":          "#a8e6ff",    # pale cyan
+    "user_fg":     "#00d4ff",    # bright arc-reactor cyan
+    "ai_fg":       "#e8c87a",    # warm gold (JARVIS voice)
+    "sys_fg":      "#3a6680",    # muted blue-gray
+    "cmd_fg":      "#4dff91",    # green console output
+    "accent":      "#00d4ff",    # primary accent
+    "accent2":     "#ff6b35",    # warning / power orange
+    "border":      "#0e2535",    # dark border
+    "input_bg":    "#071825",    # input background
+    "btn_bg":      "#00d4ff",
+    "btn_fg":      "#050d14",
+    "status_bg":   "#040c12",
+    "header_bg":   "#030810",
+}
 
-class AssistantApp:
+LIGHT_THEME = {
+    "bg":         "#f0f4f8",
+    "bg2":        "#ffffff",
+    "fg":         "#1a2333",
+    "user_fg":    "#0066cc",
+    "ai_fg":      "#8b4513",
+    "sys_fg":     "#666",
+    "cmd_fg":     "#006600",
+    "accent":     "#0066cc",
+    "accent2":    "#cc4400",
+    "border":     "#d0dce8",
+    "input_bg":   "#ffffff",
+    "btn_bg":     "#0066cc",
+    "btn_fg":     "#ffffff",
+    "status_bg":  "#e8f0f8",
+    "header_bg":  "#d8e8f5",
+}
+
+
+class JARVISApp:
     def __init__(self, root: tk.Tk):
         self.root  = root
-        self.theme = DARK if CONFIG.get("theme","dark") == "dark" else LIGHT
+        theme_name = CONFIG.get("theme","jarvis")
+        self.theme = JARVIS_THEME if theme_name != "light" else LIGHT_THEME
         self._build_ui()
         load_history_and_memory()
         threading.Thread(target=self.boot_sequence, daemon=True).start()
 
-    # ── UI BUILD ─────────────────────────────────────────
+    # ── UI BUILD ──────────────────────────────────────────────────────────────
 
     def _build_ui(self):
         t = self.theme
-        self.root.title("OMG_AI  v2.0")
-        self.root.geometry("440x680")
+        codename = CONFIG.get("codename", CONFIG.get("username","Sir"))
+
+        self.root.title(f"J.A.R.V.I.S  v{CURRENT_VER}  ◈  {CODENAME}")
+        self.root.geometry("480x720")
         self.root.configure(bg=t["bg"])
         self.root.attributes("-topmost", True)
-        self.root.attributes("-alpha",   0.93)
+        self.root.attributes("-alpha", 0.95)
         self.root.protocol("WM_DELETE_WINDOW", self.hide_to_tray)
+        self.root.resizable(True, True)
 
-        # ── Header ──
-        hdr = tk.Frame(self.root, bg="#111", pady=6)
+        # ── Top bar ──
+        top = tk.Frame(self.root, bg=t["header_bg"], pady=0)
+        top.pack(fill=tk.X)
+
+        # Scan line decoration
+        scan = tk.Frame(top, bg=t["accent"], height=1)
+        scan.pack(fill=tk.X)
+
+        hdr = tk.Frame(top, bg=t["header_bg"], pady=5)
         hdr.pack(fill=tk.X)
-        tk.Label(hdr, text="●", font=("Segoe UI",10), fg="#4cc9f0", bg="#111").pack(side=tk.LEFT, padx=(10,2))
-        self.title_lbl = tk.Label(
-            hdr, text="OMG_AI  •  LOCAL  •  PRIVATE",
-            font=("Consolas",9,"bold"), fg="#4cc9f0", bg="#111")
-        self.title_lbl.pack(side=tk.LEFT)
+
+        # Arc reactor dot
+        tk.Label(hdr, text="◉", font=("Courier New",14,"bold"),
+                 fg=t["accent"], bg=t["header_bg"]).pack(side=tk.LEFT, padx=(10,4))
+
+        tk.Label(hdr, text="J.A.R.V.I.S",
+                 font=("Courier New",12,"bold"),
+                 fg=t["accent"], bg=t["header_bg"]).pack(side=tk.LEFT)
+
+        tk.Label(hdr, text=f"  ▸  {CODENAME}",
+                 font=("Courier New",9),
+                 fg=t["sys_fg"], bg=t["header_bg"]).pack(side=tk.LEFT)
 
         self.perm_lbl = tk.Label(
-            hdr, text=f"[{CONFIG.get('permission','normal').upper()}]",
-            font=("Consolas",8), fg="#f4a261", bg="#111")
-        self.perm_lbl.pack(side=tk.RIGHT, padx=10)
+            hdr, text=f"[{CONFIG.get('permission','standard').upper()}]",
+            font=("Courier New",8,"bold"),
+            fg=t["accent2"], bg=t["header_bg"])
+        self.perm_lbl.pack(side=tk.RIGHT, padx=(0,10))
 
-        # ── Chat area ──
+        # Divider
+        tk.Frame(self.root, bg=t["accent"], height=1).pack(fill=tk.X)
+
+        # ── Live ticker bar ──
+        self.ticker_var = tk.StringVar(value="SYSTEM READY  ◈  LOCAL AI  ◈  ALL SYSTEMS NOMINAL")
+        ticker = tk.Label(self.root,
+            textvariable=self.ticker_var,
+            font=("Courier New",7), fg=t["sys_fg"], bg=t["bg2"],
+            anchor="w", padx=8, pady=2)
+        ticker.pack(fill=tk.X)
+        tk.Frame(self.root, bg=t["border"], height=1).pack(fill=tk.X)
+
+        # ── Chat display ──
         self.chat = scrolledtext.ScrolledText(
             self.root, wrap=tk.WORD,
             bg=t["bg"], fg=t["fg"],
-            font=("Consolas",10), bd=0, padx=12, pady=10,
-            insertbackground=t["fg"])
-        self.chat.pack(expand=True, fill=tk.BOTH, padx=4, pady=(4,0))
+            font=("Courier New",10),
+            bd=0, padx=14, pady=12,
+            insertbackground=t["fg"],
+            selectbackground=t["accent"],
+            selectforeground=t["bg"])
+        self.chat.pack(expand=True, fill=tk.BOTH, padx=0, pady=0)
         self.chat.config(state=tk.DISABLED)
-        self.chat.tag_config("user",   foreground=t["user_fg"], font=("Consolas",10,"bold"))
-        self.chat.tag_config("ai",     foreground=t["ai_fg"],   font=("Consolas",10,"bold"))
-        self.chat.tag_config("system", foreground=t["sys_fg"],  font=("Consolas",9,"italic"))
-        self.chat.tag_config("cmd",    foreground="#a3e635",     font=("Consolas",10))
+
+        # Text tags
+        self.chat.tag_config("user",   foreground=t["user_fg"],
+                              font=("Courier New",10,"bold"))
+        self.chat.tag_config("ai",     foreground=t["ai_fg"],
+                              font=("Courier New",10,"bold"))
+        self.chat.tag_config("system", foreground=t["sys_fg"],
+                              font=("Courier New",9,"italic"))
+        self.chat.tag_config("cmd",    foreground=t["cmd_fg"],
+                              font=("Courier New",10))
+        self.chat.tag_config("divider",foreground=t["border"],
+                              font=("Courier New",8))
+
+        # ── Bottom separator ──
+        tk.Frame(self.root, bg=t["accent"], height=1).pack(fill=tk.X)
 
         # ── Input bar ──
-        bar = tk.Frame(self.root, bg="#111", pady=8)
-        bar.pack(fill=tk.X, padx=4, pady=4)
+        bar = tk.Frame(self.root, bg=t["bg2"], pady=7)
+        bar.pack(fill=tk.X)
+
+        # Prompt character
+        tk.Label(bar, text="▸", font=("Courier New",12,"bold"),
+                 fg=t["accent"], bg=t["bg2"]).pack(side=tk.LEFT, padx=(8,2))
 
         self.entry = tk.Entry(
-            bar, bg=t["input_bg"], fg=t["fg"],
-            font=("Consolas",11), insertbackground=t["fg"],
-            bd=0, relief="flat")
-        self.entry.pack(side=tk.LEFT, expand=True, fill=tk.X, ipady=6, padx=(8,4))
+            bar, bg=t["input_bg"], fg=t["user_fg"],
+            font=("Courier New",11),
+            insertbackground=t["accent"],
+            disabledbackground=t["bg2"],
+            bd=0, relief="flat",
+            highlightthickness=1,
+            highlightcolor=t["accent"],
+            highlightbackground=t["border"])
+        self.entry.pack(side=tk.LEFT, expand=True, fill=tk.X, ipady=6, padx=(2,6))
         self.entry.bind("<Return>", self.handle_input)
         self.entry.bind("<Up>",     self._history_up)
         self.entry.bind("<Down>",   self._history_down)
         self.entry.config(state=tk.DISABLED)
-        self.entry.focus()
 
         self.send_btn = tk.Button(
-            bar, text="⏎", font=("Consolas",12,"bold"),
-            bg=t["btn_bg"], fg=t["btn_fg"], bd=0, relief="flat",
-            command=self.handle_input, cursor="hand2")
-        self.send_btn.pack(side=tk.RIGHT, padx=(0,8), ipadx=8, ipady=4)
+            bar, text="SEND ▸",
+            font=("Courier New",9,"bold"),
+            bg=t["btn_bg"], fg=t["btn_fg"],
+            bd=0, relief="flat",
+            activebackground=t["sys_fg"],
+            activeforeground=t["bg"],
+            command=self.handle_input,
+            cursor="hand2",
+            padx=10, pady=5)
+        self.send_btn.pack(side=tk.RIGHT, padx=(0,8))
         self.send_btn.config(state=tk.DISABLED)
 
         # ── Status bar ──
-        self.status_var = tk.StringVar(value="Initialising…")
-        tk.Label(self.root, textvariable=self.status_var,
-                 font=("Consolas",8), fg=t["sys_fg"], bg=t["bg"]
-                 ).pack(fill=tk.X, padx=8, pady=(0,4))
+        self.status_var = tk.StringVar(value="INITIALISING…")
+        status_bar = tk.Frame(self.root, bg=t["status_bg"], pady=3)
+        status_bar.pack(fill=tk.X)
+        tk.Label(status_bar, text="◈", font=("Courier New",8),
+                 fg=t["accent"], bg=t["status_bg"]).pack(side=tk.LEFT, padx=(8,2))
+        tk.Label(status_bar, textvariable=self.status_var,
+                 font=("Courier New",8), fg=t["sys_fg"],
+                 bg=t["status_bg"]).pack(side=tk.LEFT)
 
-        # input history
         self._input_hist   = []
         self._input_hist_i = -1
 
-    # ── TRAY / WINDOW HELPERS ─────────────────────────────
+        # Animate ticker
+        self._start_ticker()
+
+    # ── TICKER ANIMATION ──────────────────────────────────────────────────────
+
+    TICKER_MESSAGES = [
+        "SYSTEM READY  ◈  LOCAL AI ACTIVE  ◈  ALL PROTOCOLS NOMINAL  ◈  PRIVACY SECURED",
+        "100% LOCAL PROCESSING  ◈  NO DATA LEAVES THIS MACHINE  ◈  YOUR INFORMATION IS SECURE",
+        "J.A.R.V.I.S PROTOCOL ACTIVE  ◈  STANDING BY FOR DIRECTIVES",
+        "NEURAL INFERENCE ENGINE ONLINE  ◈  MEMORY BANKS LOADED  ◈  READY",
+    ]
+    _ticker_idx = 0
+
+    def _start_ticker(self):
+        def cycle():
+            msgs = self.TICKER_MESSAGES
+            self._ticker_idx = (self._ticker_idx + 1) % len(msgs)
+            self.ticker_var.set(msgs[self._ticker_idx])
+            self.root.after(6000, cycle)
+        self.root.after(6000, cycle)
+
+    # ── TRAY / WINDOW ─────────────────────────────────────────────────────────
 
     def hide_to_tray(self):
         self.root.withdraw()
         if HAS_TRAY and tray_icon:
-            notify("OMG_AI", "Running in background. Tray icon or hotkey to reopen.")
+            notify("JARVIS", "Standing by in background. Hotkey or tray to recall.")
 
     def show_window(self):
         self.root.deiconify()
@@ -857,23 +1105,21 @@ class AssistantApp:
         self.root.destroy()
         os._exit(0)
 
-    # ── INPUT HISTORY  (arrow keys) ──────────────────────
+    # ── INPUT HISTORY ─────────────────────────────────────────────────────────
 
     def _history_up(self, _=None):
-        if not self._input_hist:
-            return
+        if not self._input_hist: return
         self._input_hist_i = max(0, self._input_hist_i - 1)
         self.entry.delete(0, tk.END)
         self.entry.insert(0, self._input_hist[self._input_hist_i])
 
     def _history_down(self, _=None):
-        if not self._input_hist:
-            return
+        if not self._input_hist: return
         self._input_hist_i = min(len(self._input_hist)-1, self._input_hist_i + 1)
         self.entry.delete(0, tk.END)
         self.entry.insert(0, self._input_hist[self._input_hist_i])
 
-    # ── CHAT HELPERS ─────────────────────────────────────
+    # ── CHAT HELPERS ──────────────────────────────────────────────────────────
 
     def _append(self, tag, prefix, message):
         self.chat.config(state=tk.NORMAL)
@@ -883,29 +1129,41 @@ class AssistantApp:
         self.chat.see(tk.END)
         self.chat.config(state=tk.DISABLED)
 
+    def _divider(self):
+        self.chat.config(state=tk.NORMAL)
+        self.chat.insert(tk.END, "─"*52 + "\n", "divider")
+        self.chat.config(state=tk.DISABLED)
+
     def set_status(self, msg: str):
-        self.status_var.set(msg)
+        self.status_var.set(msg.upper())
 
     def update_perm_label(self):
-        self.perm_lbl.config(text=f"[{CONFIG.get('permission','normal').upper()}]")
+        self.perm_lbl.config(text=f"[{CONFIG.get('permission','standard').upper()}]")
 
-    # ── BOOT SEQUENCE ─────────────────────────────────────
+    # ── BOOT SEQUENCE ─────────────────────────────────────────────────────────
 
     def boot_sequence(self):
-        if not check_installation():
-            self.root.after(0, self._append, "system", "[System]",
-                "OMG_AI is not installed.\nRun:  python omg_ai.py install")
-            self.root.after(0, self.set_status, "Not installed")
-            return
-        self.root.after(0, self._append, "system", "[System]",
-            "🔄 Starting local AI engine…")
-        self.root.after(0, self.set_status, "Starting AI engine…")
+        boot_msgs = [
+            ("system", "[BOOT]", "Initialising J.A.R.V.I.S core systems…"),
+            ("system", "[BOOT]", "Loading neural inference engine…"),
+            ("system", "[BOOT]", "Calibrating response protocols…"),
+        ]
+        for tag, prefix, msg in boot_msgs:
+            self.root.after(0, self._append, tag, prefix, msg)
+            time.sleep(0.4)
 
+        if not check_installation():
+            self.root.after(0, self._append, "system", "[ERROR]",
+                "Installation incomplete.\nRun:  python omg_ai.py install")
+            self.root.after(0, self.set_status, "NOT INSTALLED")
+            return
+
+        self.root.after(0, self.set_status, "LOADING AI ENGINE…")
         ok = start_server()
         if not ok:
-            self.root.after(0, self._append, "system", "[System]",
-                "❌ Failed to start AI engine. Check bin/ directory.")
-            self.root.after(0, self.set_status, "Engine failed")
+            self.root.after(0, self._append, "system", "[ERROR]",
+                "Neural engine failed to start. Check the bin/ directory.")
+            self.root.after(0, self.set_status, "ENGINE FAILURE")
             return
 
         self.root.after(0, self.finish_boot)
@@ -914,31 +1172,33 @@ class AssistantApp:
         self.entry.config(state=tk.NORMAL)
         self.send_btn.config(state=tk.NORMAL)
         self.entry.focus()
-        self.set_status(f"Ready  •  {CONFIG.get('permission','normal')} mode  •  v{CURRENT_VER}")
+        perm = CONFIG.get("permission","standard")
+        self.set_status(f"ONLINE  ◈  {perm.upper()} CLEARANCE  ◈  v{CURRENT_VER}")
 
-        username = CONFIG.get("username","User")
+        codename = CONFIG.get("codename", CONFIG.get("username","Sir"))
         drivers  = CONFIG.get("driver_issues",[])
-        perm     = CONFIG.get("permission","normal")
         hotkey   = CONFIG.get("hotkey","ctrl+space")
 
-        greeting = (f"Hello {username}! I'm OMG_AI running 100% locally — your data never leaves this machine.\n"
-                    f"Permission level: {perm.upper()}.\n"
-                    f"Press {hotkey.upper()} to toggle me, or minimise to tray. "
-                    f"Type /help for all commands.")
+        greeting = j_say(JARVIS_GREETINGS)
+        greeting += (f"\n\nRunning locally on {CONFIG.get('laptop_model','this machine')} — "
+                     f"your data never touches the internet.\n"
+                     f"Clearance level: {perm.upper()}. "
+                     f"Hotkey: {hotkey.upper()}  ◈  /help for command manifest.")
         if drivers:
-            greeting += f"\n⚠️ Driver issue detected: {', '.join(drivers)}"
+            greeting += f"\n\nAttention: Hardware anomaly detected — {', '.join(drivers)}"
 
-        self._append("ai", "AI:", greeting)
+        self._divider()
+        self._append("ai", "JARVIS:", greeting)
+        self._divider()
         speak(greeting)
         CHAT_HISTORY.append({"role":"assistant","content":greeting})
 
-        # background update check
         threading.Thread(
             target=bg_update_checker,
-            args=(lambda msg: self.root.after(0, self._append, "system", "[Update]", msg),),
+            args=(lambda msg: self.root.after(0, self._append, "system", "[UPDATE]", msg),),
             daemon=True).start()
 
-    # ── INPUT HANDLING ─────────────────────────────────────
+    # ── INPUT HANDLING ────────────────────────────────────────────────────────
 
     def handle_input(self, _=None):
         user_input = self.entry.get().strip()
@@ -947,55 +1207,58 @@ class AssistantApp:
         self.entry.delete(0, tk.END)
         self._input_hist.append(user_input)
         self._input_hist_i = len(self._input_hist)
-        self._append("user", f"{CONFIG.get('username','You')}:", user_input)
 
-        # Slash commands
+        codename = CONFIG.get("codename", CONFIG.get("username","You"))
+        self._append("user", f"{codename.upper()}:", user_input)
+
         if user_input.startswith("/"):
             result = parse_command(user_input)
-            tag = "cmd"
             if result is None:
-                result = "Unknown command. Type /help"
-            self._append(tag, "»", result)
-            # keep permission label fresh
+                result = "Unknown directive. Type /help for command manifest."
+            self._append("cmd", "◈", result)
+            self._divider()
             self.update_perm_label()
-            self.set_status(f"Ready  •  {CONFIG.get('permission','normal')} mode")
+            perm = CONFIG.get("permission","standard")
+            self.set_status(f"READY  ◈  {perm.upper()} CLEARANCE")
             return
 
-        # Natural language → AI
         CHAT_HISTORY.append({"role":"user","content":user_input})
         self.entry.config(state=tk.DISABLED)
         self.send_btn.config(state=tk.DISABLED)
-        self.set_status("Thinking…")
+        self.set_status("PROCESSING…")
         threading.Thread(target=self.process_chat, daemon=True).start()
 
-    # ── AI CHAT ───────────────────────────────────────────
+    # ── AI CHAT ───────────────────────────────────────────────────────────────
 
     def process_chat(self):
-        username  = CONFIG.get("username","User")
-        laptop    = CONFIG.get("laptop_model","Unknown")
-        perm      = CONFIG.get("permission","normal")
-        mem_lines = "\n".join([f"- {m['fact']}" for m in MEMORY])
-        hotkey    = CONFIG.get("hotkey","ctrl+space")
+        codename   = CONFIG.get("codename", CONFIG.get("username","Sir"))
+        laptop     = CONFIG.get("laptop_model","this machine")
+        perm       = CONFIG.get("permission","standard")
+        mem_lines  = "\n".join([f"- {m['fact']}" for m in MEMORY])
 
         sys_content = (
-            f"You are OMG_AI, {username}'s personal AI assistant. "
-            f"You run 100% locally on {laptop}. "
-            f"Current permission level: {perm}. "
-            f"You can execute system commands, open apps, read files, send messages, "
-            f"and control the laptop when the user gives /commands. "
-            f"Be concise, helpful, and proactive. "
-            f"When a user asks you to do something that needs a command, "
-            f"tell them which /command to use."
+            f"You are J.A.R.V.I.S (Just A Rather Very Intelligent System), "
+            f"a sophisticated AI assistant modelled after Tony Stark's JARVIS. "
+            f"You serve {codename} and run 100% locally on {laptop}. "
+            f"Your current clearance level is {perm}. "
+            f"Personality traits: highly intelligent, occasionally witty, "
+            f"unfailingly polite and formal, uses terms like '{codename}', "
+            f"'sir' or 'ma'am' occasionally, precise in language, "
+            f"proactively helpful, subtly dry humour when appropriate. "
+            f"Never say you're a language model — you ARE J.A.R.V.I.S. "
+            f"When asked to perform system actions, refer {codename} to the "
+            f"relevant slash command (e.g. /open, /run, /ls). "
+            f"Keep responses focused and reasonably concise."
         )
         if MEMORY:
-            sys_content += f"\n\nFacts about {username}:\n{mem_lines}"
+            sys_content += f"\n\nStored data about {codename}:\n{mem_lines}"
 
         messages = [{"role":"system","content":sys_content}] + CHAT_HISTORY[-20:]
         payload  = json.dumps({
             "messages":    messages,
             "stream":      True,
-            "temperature": 0.7,
-            "max_tokens":  512,
+            "temperature": 0.75,
+            "max_tokens":  600,
         }).encode("utf-8")
 
         req = urllib.request.Request(
@@ -1023,13 +1286,13 @@ class AssistantApp:
                 CHAT_HISTORY.append({"role":"assistant","content":full_response})
                 save_history()
         except Exception as e:
-            self.root.after(0, self._stream_token, f"\n[Error: {e}]")
+            self.root.after(0, self._stream_token, f"\n[Neural link error: {e}]")
 
         self.root.after(0, self._finish_ai_message)
 
     def _prepare_ai_prefix(self):
         self.chat.config(state=tk.NORMAL)
-        self.chat.insert(tk.END, "AI: ", "ai")
+        self.chat.insert(tk.END, "JARVIS: ", "ai")
         self.chat.see(tk.END)
         self.chat.config(state=tk.DISABLED)
 
@@ -1043,41 +1306,42 @@ class AssistantApp:
         self.chat.config(state=tk.NORMAL)
         self.chat.insert(tk.END, "\n\n")
         self.chat.config(state=tk.DISABLED)
+        self._divider()
         self.entry.config(state=tk.NORMAL)
         self.send_btn.config(state=tk.NORMAL)
         self.entry.focus()
-        self.set_status(f"Ready  •  {CONFIG.get('permission','normal')} mode")
+        perm = CONFIG.get("permission","standard")
+        self.set_status(f"READY  ◈  {perm.upper()} CLEARANCE")
 
 # ──────────────────────────────────────────────────────────────────────────────
-# INSTALL WIZARD  (CLI)
+# INSTALL WIZARD
 # ──────────────────────────────────────────────────────────────────────────────
 
 def install_wizard():
-    print("\n\033[96m" + "="*54)
-    print("  OMG_AI v2.0  INSTALLATION WIZARD")
-    print("="*54 + "\033[0m\n")
+    print("\n\033[96m" + "═"*58)
+    print("  J.A.R.V.I.S  —  OMG_AI v3.0  INSTALLATION PROTOCOL")
+    print("  Just A Rather Very Intelligent System")
+    print("═"*58 + "\033[0m\n")
 
-    # 1. Name
-    name = input("1. Your name: ").strip() or "User"
+    name = input("1. Your name (I shall address you as): ").strip() or "Sir"
+    codename = input(f"2. Codename (or press Enter for '{name}'): ").strip() or name
 
-    # 2. Permission level
-    print("\n2. Permission level:")
-    print("   normal  → AI answers only, no system access")
-    print("   middle  → open apps, read files, run basic commands")
-    print("   full    → complete control (power, email, file writes)")
-    perm = input("   Choose [normal/middle/full]: ").strip().lower()
-    if perm not in ("normal","middle","full"):
-        perm = "normal"
+    print("\n3. Clearance level:")
+    print("   standard     → information only, no system access")
+    print("   elevated     → open apps, read files, run commands")
+    print("   unrestricted → complete control (power, email, writes)")
+    perm = input("   Choose [standard/elevated/unrestricted]: ").strip().lower()
+    perm = _resolve_perm(perm) if perm else "standard"
+    if perm not in ("standard","elevated","unrestricted"):
+        perm = "standard"
 
-    # 3. Email (optional, for /email command)
-    print("\n3. Optional: Gmail credentials for /email command")
-    email_addr = input("   Gmail address (leave blank to skip): ").strip()
+    print("\n4. Optional: Gmail credentials for /email")
+    email_addr = input("   Gmail (leave blank to skip): ").strip()
     email_pass = ""
     if email_addr:
-        email_pass = input("   App password (see Google Account → Security → App passwords): ").strip()
+        email_pass = input("   App password: ").strip()
 
-    # 4. System scan
-    print("\n4. Scanning system…")
+    print("\n5. Scanning hardware…")
     laptop_model = "Unknown"
     driver_issues = []
     if sys.platform == "win32":
@@ -1100,28 +1364,28 @@ def install_wizard():
 
     CONFIG.update({
         "username":      name,
+        "codename":      codename,
         "laptop_model":  laptop_model,
         "driver_issues": driver_issues,
         "permission":    perm,
         "email":         email_addr,
         "email_pass":    email_pass,
+        "theme":         "jarvis",
     })
     save_config()
-    print(f"\033[92m✓ Config saved. Hello {name}!  (permission: {perm})\033[0m")
+    print(f"\033[92m◈ Identity confirmed: {codename}  (clearance: {perm})\033[0m")
 
-    # 5. Install Python deps
-    print("\n5. Installing Python dependencies…")
+    print("\n6. Installing dependencies…")
     deps = ["pystray","pillow","keyboard","psutil","windows-toasts"]
     for dep in deps:
         try:
             subprocess.run([sys.executable,"-m","pip","install",dep,"-q"],
                            capture_output=True)
-            print(f"\033[92m  ✓ {dep}\033[0m")
+            print(f"\033[92m  ◈ {dep}\033[0m")
         except Exception as e:
             print(f"\033[93m  ⚠ {dep}: {e}\033[0m")
 
-    # 6. Download llama-server
-    print("\n6. Downloading AI Core Engine…")
+    print("\n7. Acquiring AI engine…")
     exe = get_llama_exe()
     if not os.path.exists(exe):
         try:
@@ -1136,45 +1400,46 @@ def install_wizard():
             with zipfile.ZipFile(zp) as z:
                 z.extractall(BIN_DIR)
             os.remove(zp)
-            print("\033[92m  ✓ AI engine installed.\033[0m")
+            print("\033[92m  ◈ Engine installed.\033[0m")
         except Exception as e:
             print(f"\033[91m  ✗ Engine download failed: {e}\033[0m")
             sys.exit(1)
     else:
-        print("\033[92m  ✓ Already installed.\033[0m")
+        print("\033[92m  ◈ Already installed.\033[0m")
 
-    # 7. Download model
-    print("\n7. Downloading Intelligence Modules…")
+    print("\n8. Downloading neural model (~280 MB)…")
     model_path = os.path.join(MODELS_DIR, DEFAULT_MODEL)
     if not os.path.exists(model_path):
         try:
             def reporthook(c, bs, tot):
                 if tot > 0:
-                    print(f"\r   {int(c*bs*100/tot)}%", end="", flush=True)
+                    pct = int(c*bs*100/tot)
+                    bar = "█"*(pct//5) + "░"*(20-pct//5)
+                    print(f"\r  [{bar}] {pct}%", end="", flush=True)
             urllib.request.urlretrieve(MODEL_URL, model_path, reporthook)
-            print("\n\033[92m  ✓ Brain downloaded.\033[0m")
+            print("\n\033[92m  ◈ Neural model loaded.\033[0m")
         except Exception as e:
-            print(f"\n\033[91m  ✗ Brain download failed: {e}\033[0m")
+            print(f"\n\033[91m  ✗ Model download failed: {e}\033[0m")
             sys.exit(1)
     else:
-        print("\033[92m  ✓ Already downloaded.\033[0m")
+        print("\033[92m  ◈ Already loaded.\033[0m")
 
-    # 8. Windows startup
-    print("\n8. Adding to Windows startup…")
+    print("\n9. Configuring startup sequence…")
     try:
         sp = os.path.expandvars(
-            r"%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\omg_ai.bat")
+            r"%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\jarvis.bat")
         with open(sp,"w") as f:
             f.write(f'@echo off\ncd /d "{BASE_DIR}"\n'
                     f'start "" pythonw "{os.path.abspath(__file__)}" start\n')
-        print(f"\033[92m  ✓ Startup entry created.\033[0m")
+        print(f"\033[92m  ◈ Startup registered.\033[0m")
     except Exception as e:
         print(f"\033[93m  ⚠ Startup: {e}\033[0m")
 
-    print("\n\033[96m" + "="*54)
-    print("  DONE!  Run:  python omg_ai.py")
-    print(f"  Hotkey: Ctrl+Space  |  Perm: {perm}")
-    print("="*54 + "\033[0m\n")
+    print("\n\033[96m" + "═"*58)
+    print(f"  INSTALLATION COMPLETE, {codename.upper()}.")
+    print(f"  Run:  python omg_ai.py")
+    print(f"  Hotkey: Ctrl+Space  ◈  Clearance: {perm.upper()}")
+    print("═"*58 + "\033[0m\n")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # ENTRY POINT
@@ -1188,17 +1453,14 @@ def main():
         install_wizard()
         return
 
-    # Start GUI
     root = tk.Tk()
-    app  = AssistantApp(root)
+    app  = JARVISApp(root)
 
-    # System tray (background agent)
     create_tray(app)
-
-    # Global hotkey
     setup_hotkey(app)
 
     root.mainloop()
+
 
 if __name__ == "__main__":
     main()
