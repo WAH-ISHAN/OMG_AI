@@ -4220,12 +4220,12 @@ class AssistantApp:
         self.chat.pack(expand=True, fill="both", padx=40, pady=20)
         self.chat.configure(state="disabled")
 
-        self.chat.tag_config("user", foreground=t["user_fg"], font=("Segoe UI", 14, "bold"))
-        self.chat.tag_config("ai", foreground=t["ai_fg"], font=("Segoe UI", 14))
-        self.chat.tag_config("system", foreground=t["sys_fg"], font=("Segoe UI", 12, "italic"))
-        self.chat.tag_config("cmd", foreground=t["cmd_fg"], font=("Consolas", 14))
-        self.chat.tag_config("warn", foreground=t["warn_fg"], font=("Segoe UI", 14, "bold"))
-        self.chat.tag_config("divider", foreground=t["border"], font=("Segoe UI", 8))
+        self.chat.tag_config("user", foreground=t["user_fg"])
+        self.chat.tag_config("ai", foreground=t["ai_fg"])
+        self.chat.tag_config("system", foreground=t["sys_fg"])
+        self.chat.tag_config("cmd", foreground=t["cmd_fg"])
+        self.chat.tag_config("warn", foreground=t["warn_fg"])
+        self.chat.tag_config("divider", foreground=t["border"])
 
         # ── INPUT BAR ──
         input_container = ctk.CTkFrame(self.main_container, fg_color=t["bg"])
