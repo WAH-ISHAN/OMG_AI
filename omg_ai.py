@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════╗
-║   J.A.R.V.I.S  —  OMG_AI  v3.0  "IRON PROTOCOL"                ║
-║   Just A Rather Very Intelligent System                          ║
+║             OMG_AI  v3.0  —  Local AI Assistant                ║
+║   Background Agent  •  Full Laptop Control  •  100% Private                          ║
 ║   100% Local  •  Full Laptop Control  •  HUD Interface          ║
 ║   Permission Levels: standard | elevated | unrestricted          ║
 ╚══════════════════════════════════════════════════════════════════╝
@@ -44,14 +44,14 @@ CHAT_HISTORY = []
 MEMORY       = []
 CONFIG = {
     "username":       "Sir",
-    "codename":       "Director",          # How JARVIS calls you
+    "codename":       "User",          # How AI calls you
     "laptop_model":   "Stark Station",
     "driver_issues":  [],
     "permission":     "standard",
     "hotkey":         "ctrl+space",
     "email":          "",
     "email_pass":     "",
-    "theme":          "jarvis",            # jarvis | light | dark
+    "theme":          "dark",            # jarvis | light | dark
     "startup":        True,
     "voice_enabled":  True,
     "wit_level":      "high",              # low | medium | high
@@ -63,7 +63,7 @@ DEFAULT_MODEL = "qwen2.5-0.5b-instruct-q4_k_m.gguf"
 MODEL_URL     = "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf"
 GITHUB_RAW    = "https://raw.githubusercontent.com/WAH-ISHAN/OMG_AI/main/omg_ai.py"
 CURRENT_VER   = "3.0.0"
-CODENAME      = "IRON PROTOCOL"
+CODENAME      = "OMG_AI CORE"
 
 server_process = None
 tray_icon      = None
@@ -93,16 +93,16 @@ except ImportError:
 
 try:
     from windows_toasts import Toast, WindowsToaster
-    _toaster = WindowsToaster("JARVIS")
+    _toaster = WindowsToaster("OMG_AI")
     HAS_TOAST = True
 except Exception:
     HAS_TOAST = False
 
 # ──────────────────────────────────────────────────────────────────────────────
-# JARVIS PERSONALITY ENGINE
+# AI PERSONALITY ENGINE
 # ──────────────────────────────────────────────────────────────────────────────
 
-JARVIS_GREETINGS = [
+AI_GREETINGS = [
     "Good {period}, {codename}. All systems are nominal. How may I assist you today?",
     "Welcome back, {codename}. I've kept the systems warm in your absence.",
     "Online and operational, {codename}. What shall we accomplish today?",
@@ -110,7 +110,7 @@ JARVIS_GREETINGS = [
     "Initialisation complete. Good {period}, {codename}. Ready for deployment.",
 ]
 
-JARVIS_CONFIRMATIONS = [
+AI_CONFIRMATIONS = [
     "Understood, {codename}.",
     "At once, {codename}.",
     "Certainly. Executing now.",
@@ -119,14 +119,14 @@ JARVIS_CONFIRMATIONS = [
     "Already on it.",
 ]
 
-JARVIS_ERRORS = [
+AI_ERRORS = [
     "I'm afraid I encountered an obstacle, {codename}. {error}",
     "My apologies — that didn't go as planned. {error}",
     "A minor setback, {codename}. {error}",
     "I regret to report a failure: {error}",
 ]
 
-JARVIS_PERMISSION_DENIALS = [
+AI_PERMISSION_DENIALS = [
     "I'm sorry, {codename}, but that action exceeds my current authorisation level ({current}). "
     "You'll need to elevate my clearance to '{required}' first.",
     "Access restricted, {codename}. '{required}' clearance required — I currently hold '{current}'.",
@@ -136,8 +136,8 @@ JARVIS_PERMISSION_DENIALS = [
 
 import random
 
-def j_say(template_list: list, **kwargs) -> str:
-    """Pick a random JARVIS phrase and format it."""
+def ai_say(template_list: list, **kwargs) -> str:
+    """Pick a random AI phrase and format it."""
     codename = CONFIG.get("codename", CONFIG.get("username", "Sir"))
     now      = datetime.now().hour
     period   = "morning" if now < 12 else ("afternoon" if now < 17 else "evening")
@@ -171,7 +171,7 @@ def notify(title: str, body: str):
             pass
 
 # ──────────────────────────────────────────────────────────────────────────────
-# TEXT-TO-SPEECH  (JARVIS voice)
+# TEXT-TO-SPEECH
 # ──────────────────────────────────────────────────────────────────────────────
 
 def speak(text: str):
@@ -237,7 +237,7 @@ def save_memory():
         json.dump(MEMORY, f, ensure_ascii=False, indent=2)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# PERMISSION SYSTEM  (renamed for JARVIS theme)
+# PERMISSION SYSTEM  (Permission System)
 # ──────────────────────────────────────────────────────────────────────────────
 
 PERMISSION_RANK = {"standard": 0, "elevated": 1, "unrestricted": 2}
@@ -254,7 +254,7 @@ def has_perm(required: str) -> bool:
     return cur >= need
 
 def perm_denied(required: str) -> str:
-    return j_say(JARVIS_PERMISSION_DENIALS, required=required)
+    return ai_say(AI_PERMISSION_DENIALS, required=required)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # AUTO-UPDATER
@@ -283,7 +283,7 @@ def do_self_update():
         os.rename(__file__, backup)
         with open(__file__, "wb") as f:
             f.write(code)
-        notify("JARVIS Update", "New protocols installed. Restarting…")
+        notify("OMG_AI Update", "New protocols installed. Restarting…")
         time.sleep(1)
         os.execv(sys.executable, [sys.executable, __file__] + sys.argv[1:])
     except Exception as e:
@@ -293,7 +293,7 @@ def bg_update_checker(callback):
     while True:
         new_ver = check_for_update()
         if new_ver:
-            notify("JARVIS", f"Protocol v{new_ver} is available. Use /update to install.")
+            notify("OMG_AI", f"Protocol v{new_ver} is available. Use /update to install.")
             if callback:
                 callback(f"New firmware v{new_ver} is available, {CONFIG.get('codename','Sir')}. "
                          f"Use /update when ready.")
@@ -366,9 +366,9 @@ class SystemCore:
             subprocess.Popen(app_name, shell=True,
                              creationflags=subprocess.CREATE_NO_WINDOW
                              if sys.platform=="win32" else 0)
-            return j_say(JARVIS_CONFIRMATIONS) + f"\n  Launching: {app_name}"
+            return ai_say(AI_CONFIRMATIONS) + f"\n  Launching: {app_name}"
         except Exception as e:
-            return j_say(JARVIS_ERRORS, error=str(e))
+            return ai_say(AI_ERRORS, error=str(e))
 
     @staticmethod
     def close_app(app_name: str) -> str:
@@ -383,7 +383,7 @@ class SystemCore:
                 subprocess.run(["pkill","-f",app_name], capture_output=True)
             return f"Process '{app_name}' has been terminated."
         except Exception as e:
-            return j_say(JARVIS_ERRORS, error=str(e))
+            return ai_say(AI_ERRORS, error=str(e))
 
     @staticmethod
     def list_processes() -> str:
@@ -409,7 +409,7 @@ class SystemCore:
                 out = subprocess.check_output("ps aux", shell=True, text=True)
                 return "◈  ACTIVE PROCESSES\n" + out[:2000]
         except Exception as e:
-            return j_say(JARVIS_ERRORS, error=str(e))
+            return ai_say(AI_ERRORS, error=str(e))
 
     @staticmethod
     def read_file(path: str) -> str:
@@ -421,7 +421,7 @@ class SystemCore:
                 content = f.read(4000)
             return f"◈  FILE CONTENTS  —  {expanded}\n{'─'*45}\n{content}"
         except Exception as e:
-            return j_say(JARVIS_ERRORS, error=str(e))
+            return ai_say(AI_ERRORS, error=str(e))
 
     @staticmethod
     def list_dir(path: str = ".") -> str:
@@ -435,7 +435,7 @@ class SystemCore:
             return (f"◈  DIRECTORY SCAN  —  {expanded}\n{'─'*45}\n"
                     + "\n".join(dirs + files))
         except Exception as e:
-            return j_say(JARVIS_ERRORS, error=str(e))
+            return ai_say(AI_ERRORS, error=str(e))
 
     @staticmethod
     def run_command(cmd: str) -> str:
@@ -457,7 +457,7 @@ class SystemCore:
         except subprocess.TimeoutExpired:
             return f"Command timed out after 15s: {cmd}"
         except Exception as e:
-            return j_say(JARVIS_ERRORS, error=str(e))
+            return ai_say(AI_ERRORS, error=str(e))
 
     @staticmethod
     def search_web_quick(query: str) -> str:
@@ -481,7 +481,7 @@ class SystemCore:
                 f.write(content)
             return f"File written successfully: {expanded}"
         except Exception as e:
-            return j_say(JARVIS_ERRORS, error=str(e))
+            return ai_say(AI_ERRORS, error=str(e))
 
     @staticmethod
     def set_volume(level: int) -> str:
@@ -504,7 +504,7 @@ class SystemCore:
                         creationflags=subprocess.CREATE_NO_WINDOW, capture_output=True)
                 return f"Audio output adjusted to {level}%."
             except Exception as e:
-                return j_say(JARVIS_ERRORS, error=str(e))
+                return ai_say(AI_ERRORS, error=str(e))
         return "Volume control is Windows-only, {codename}.".format(
             codename=CONFIG.get("codename","Sir"))
 
@@ -548,7 +548,7 @@ class SystemCore:
                 srv.send_message(msg)
             return f"Message transmitted to {to} successfully."
         except Exception as e:
-            return j_say(JARVIS_ERRORS, error=str(e))
+            return ai_say(AI_ERRORS, error=str(e))
 
     @staticmethod
     def open_whatsapp_web(phone: str, message: str = "") -> str:
@@ -579,7 +579,7 @@ class SystemCore:
                                creationflags=subprocess.CREATE_NO_WINDOW, capture_output=True)
             return f"Visual capture saved: {path}"
         except Exception as e:
-            return j_say(JARVIS_ERRORS, error=str(e))
+            return ai_say(AI_ERRORS, error=str(e))
 
 # ──────────────────────────────────────────────────────────────────────────────
 # AI SERVER  (llama.cpp)
@@ -646,7 +646,7 @@ def parse_command(text: str) -> str | None:
     # ─ Help ──────────────────────────────────────────────
     if cmd == "/help":
         return (
-            "◈  COMMAND REFERENCE  —  JARVIS PROTOCOL\n"
+            "◈  COMMAND REFERENCE  —  OMG_AI PROTOCOL\n"
             "═"*50 + "\n"
             "  STANDARD CLEARANCE\n"
             "  /help               — this directive list\n"
@@ -858,12 +858,12 @@ def create_tray(app_ref):
         app_ref.root.after(0, app_ref.quit_app)
 
     menu = pystray.Menu(
-        pystray.MenuItem("Summon JARVIS", on_show, default=True),
+        pystray.MenuItem("Summon OMG_AI", on_show, default=True),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Shutdown", on_quit),
     )
 
-    tray_icon = pystray.Icon("JARVIS", img, "JARVIS — Local AI", menu)
+    tray_icon = pystray.Icon("OMG_AI", img, "OMG_AI — Local AI", menu)
     threading.Thread(target=tray_icon.run, daemon=True).start()
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -880,16 +880,16 @@ def setup_hotkey(app_ref):
         pass
 
 # ──────────────────────────────────────────────────────────────────────────────
-# JARVIS HUD GUI  — Iron Man aesthetic
+# HUD GUI
 # ──────────────────────────────────────────────────────────────────────────────
 
-# ── JARVIS HUD theme ──────────────────────────────────────────────────────────
-JARVIS_THEME = {
+# ── HUD theme ──────────────────────────────────────────────────────────
+DARK_THEME = {
     "bg":          "#050d14",    # deep black-blue
     "bg2":         "#071520",    # slightly lighter panel
     "fg":          "#a8e6ff",    # pale cyan
     "user_fg":     "#00d4ff",    # bright arc-reactor cyan
-    "ai_fg":       "#e8c87a",    # warm gold (JARVIS voice)
+    "ai_fg":       "#e8c87a",    # warm gold
     "sys_fg":      "#3a6680",    # muted blue-gray
     "cmd_fg":      "#4dff91",    # green console output
     "accent":      "#00d4ff",    # primary accent
@@ -921,11 +921,11 @@ LIGHT_THEME = {
 }
 
 
-class JARVISApp:
+class AssistantApp:
     def __init__(self, root: tk.Tk):
         self.root  = root
-        theme_name = CONFIG.get("theme","jarvis")
-        self.theme = JARVIS_THEME if theme_name != "light" else LIGHT_THEME
+        theme_name = CONFIG.get("theme","dark")
+        self.theme = DARK_THEME if theme_name != "light" else LIGHT_THEME
         self._build_ui()
         load_history_and_memory()
         threading.Thread(target=self.boot_sequence, daemon=True).start()
@@ -936,7 +936,7 @@ class JARVISApp:
         t = self.theme
         codename = CONFIG.get("codename", CONFIG.get("username","Sir"))
 
-        self.root.title(f"J.A.R.V.I.S  v{CURRENT_VER}  ◈  {CODENAME}")
+        self.root.title(f"OMG_AI  v{CURRENT_VER}  ◈  {CODENAME}")
         self.root.geometry("480x720")
         self.root.configure(bg=t["bg"])
         self.root.attributes("-topmost", True)
@@ -959,7 +959,7 @@ class JARVISApp:
         tk.Label(hdr, text="◉", font=("Courier New",14,"bold"),
                  fg=t["accent"], bg=t["header_bg"]).pack(side=tk.LEFT, padx=(10,4))
 
-        tk.Label(hdr, text="J.A.R.V.I.S",
+        tk.Label(hdr, text="OMG_AI",
                  font=("Courier New",12,"bold"),
                  fg=t["accent"], bg=t["header_bg"]).pack(side=tk.LEFT)
 
@@ -1069,7 +1069,7 @@ class JARVISApp:
     TICKER_MESSAGES = [
         "SYSTEM READY  ◈  LOCAL AI ACTIVE  ◈  ALL PROTOCOLS NOMINAL  ◈  PRIVACY SECURED",
         "100% LOCAL PROCESSING  ◈  NO DATA LEAVES THIS MACHINE  ◈  YOUR INFORMATION IS SECURE",
-        "J.A.R.V.I.S PROTOCOL ACTIVE  ◈  STANDING BY FOR DIRECTIVES",
+        "OMG_AI PROTOCOL ACTIVE  ◈  STANDING BY FOR DIRECTIVES",
         "NEURAL INFERENCE ENGINE ONLINE  ◈  MEMORY BANKS LOADED  ◈  READY",
     ]
     _ticker_idx = 0
@@ -1087,7 +1087,7 @@ class JARVISApp:
     def hide_to_tray(self):
         self.root.withdraw()
         if HAS_TRAY and tray_icon:
-            notify("JARVIS", "Standing by in background. Hotkey or tray to recall.")
+            notify("OMG_AI", "Standing by in background. Hotkey or tray to recall.")
 
     def show_window(self):
         self.root.deiconify()
@@ -1144,7 +1144,7 @@ class JARVISApp:
 
     def boot_sequence(self):
         boot_msgs = [
-            ("system", "[BOOT]", "Initialising J.A.R.V.I.S core systems…"),
+            ("system", "[BOOT]", "Initialising OMG_AI core systems…"),
             ("system", "[BOOT]", "Loading neural inference engine…"),
             ("system", "[BOOT]", "Calibrating response protocols…"),
         ]
@@ -1179,7 +1179,7 @@ class JARVISApp:
         drivers  = CONFIG.get("driver_issues",[])
         hotkey   = CONFIG.get("hotkey","ctrl+space")
 
-        greeting = j_say(JARVIS_GREETINGS)
+        greeting = ai_say(AI_GREETINGS)
         greeting += (f"\n\nRunning locally on {CONFIG.get('laptop_model','this machine')} — "
                      f"your data never touches the internet.\n"
                      f"Clearance level: {perm.upper()}. "
@@ -1188,7 +1188,7 @@ class JARVISApp:
             greeting += f"\n\nAttention: Hardware anomaly detected — {', '.join(drivers)}"
 
         self._divider()
-        self._append("ai", "JARVIS:", greeting)
+        self._append("ai", "OMG_AI:", greeting)
         self._divider()
         speak(greeting)
         CHAT_HISTORY.append({"role":"assistant","content":greeting})
@@ -1237,15 +1237,15 @@ class JARVISApp:
         mem_lines  = "\n".join([f"- {m['fact']}" for m in MEMORY])
 
         sys_content = (
-            f"You are J.A.R.V.I.S (Just A Rather Very Intelligent System), "
-            f"a sophisticated AI assistant modelled after Tony Stark's JARVIS. "
+            f"You are J.A.R.V.I.S (Background Agent  •  Full Laptop Control  •  100% Private), "
+            f"a highly capable and private local AI assistant. "
             f"You serve {codename} and run 100% locally on {laptop}. "
             f"Your current clearance level is {perm}. "
             f"Personality traits: highly intelligent, occasionally witty, "
             f"unfailingly polite and formal, uses terms like '{codename}', "
             f"'sir' or 'ma'am' occasionally, precise in language, "
             f"proactively helpful, subtly dry humour when appropriate. "
-            f"Never say you're a language model — you ARE J.A.R.V.I.S. "
+            f"Never say you're a language model — you ARE OMG_AI. "
             f"When asked to perform system actions, refer {codename} to the "
             f"relevant slash command (e.g. /open, /run, /ls). "
             f"Keep responses focused and reasonably concise."
@@ -1292,7 +1292,7 @@ class JARVISApp:
 
     def _prepare_ai_prefix(self):
         self.chat.config(state=tk.NORMAL)
-        self.chat.insert(tk.END, "JARVIS: ", "ai")
+        self.chat.insert(tk.END, "OMG_AI: ", "ai")
         self.chat.see(tk.END)
         self.chat.config(state=tk.DISABLED)
 
@@ -1319,8 +1319,8 @@ class JARVISApp:
 
 def install_wizard():
     print("\n\033[96m" + "═"*58)
-    print("  J.A.R.V.I.S  —  OMG_AI v3.0  INSTALLATION PROTOCOL")
-    print("  Just A Rather Very Intelligent System")
+    print("  OMG_AI v3.0  INSTALLATION WIZARD")
+    print("  Background Agent  •  Full Laptop Control  •  100% Private")
     print("═"*58 + "\033[0m\n")
 
     name = input("1. Your name (I shall address you as): ").strip() or "Sir"
@@ -1427,7 +1427,7 @@ def install_wizard():
     print("\n9. Configuring startup sequence…")
     try:
         sp = os.path.expandvars(
-            r"%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\jarvis.bat")
+            r"%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\omg_ai.bat")
         with open(sp,"w") as f:
             f.write(f'@echo off\ncd /d "{BASE_DIR}"\n'
                     f'start "" pythonw "{os.path.abspath(__file__)}" start\n')
@@ -1454,7 +1454,7 @@ def main():
         return
 
     root = tk.Tk()
-    app  = JARVISApp(root)
+    app  = AssistantApp(root)
 
     create_tray(app)
     setup_hotkey(app)
