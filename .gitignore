@@ -1,0 +1,12 @@
+# Ignore AI Models and Binaries (Downloaded automatically by the script)
+models/
+bin/
+
+# Ignore local configuration and memory
+config.json
+chat_history.json
+memory.json
+
+# Ignore Python cache
+__pycache__/
+*.pyc
