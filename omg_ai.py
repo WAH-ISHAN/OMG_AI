@@ -454,6 +454,10 @@ def do_self_update():
 
 def bg_update_checker(callback):
     while True:
+        if not CONFIG.get("auto_update_check", False):
+            import time
+            time.sleep(3600)
+            continue
         new_ver = check_for_update()
         if new_ver:
             notify("OMG_AI", f"Protocol v{new_ver} available. Use /update to install.")
@@ -4743,16 +4747,24 @@ def install_wizard():
     else:
         print("\033[92m  ◈ Already loaded.\033[0m")
 
-    print("\n9. Configuring startup sequence…")
+    print("\n9. Configuring startup sequence (Registry)…")
     try:
-        sp = os.path.expandvars(
-            r"%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\omg_ai.bat")
-        with open(sp,"w") as f:
-            f.write(f'@echo off\ncd /d "{BASE_DIR}"\n'
-                    f'start "" pythonw "{os.path.abspath(__file__)}" start\n')
-        print(f"\033[92m  ◈ Startup registered.\033[0m")
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_SET_VALUE)
+        
+        import sys
+        if getattr(sys, 'frozen', False):
+            # If compiled via pyinstaller
+            exe_path = sys.executable
+            winreg.SetValueEx(key, "OMG_AI", 0, winreg.REG_SZ, f'"{exe_path}"')
+        else:
+            # If running as script
+            winreg.SetValueEx(key, "OMG_AI", 0, winreg.REG_SZ, f'pythonw "{os.path.abspath(__file__)}"')
+            
+        winreg.CloseKey(key)
+        print(f"\033[92m  ◈ Registry startup registered.\033[0m")
     except Exception as e:
-        print(f"\033[93m  ⚠ Startup: {e}\033[0m")
+        print(f"\033[93m  ⚠ Startup registry failed: {e}\033[0m")
 
     print("\n\033[96m" + "═"*62)
     print(f"  INSTALLATION COMPLETE, {codename.upper()}.")
