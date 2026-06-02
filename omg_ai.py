@@ -4886,19 +4886,19 @@ class GUISetupWizard(ctk.CTkToplevel):
 # ──────────────────────────────────────────────────────────────────────────────
 
 def install_wizard():
-    print("\n\033[96m" + "═"*62)
-    print("  OMG_AI v4.0  —  INSTALLATION WIZARD")
-    print("  Background Agent  •  Full Laptop Control  •  100% Private")
-    print("  130+ Commands  •  10 Standard  •  13 Elevated  •  100+ Unrestricted")
-    print("═"*62 + "\033[0m\n")
+    print("\n\033[96m" + "="*62)
+    print("  OMG_AI v4.0  -  INSTALLATION WIZARD")
+    print("  Background Agent  *  Full Laptop Control  *  100% Private")
+    print("  130+ Commands  *  10 Standard  *  13 Elevated  *  100+ Unrestricted")
+    print("="*62 + "\033[0m\n")
 
     name     = input("1. Your name: ").strip() or "Sir"
     codename = input(f"2. Codename (Enter for '{name}'): ").strip() or name
 
     print("\n3. Clearance level:")
-    print("   standard     → info, diagnostics, privacy, calc, tips (10+ features)")
-    print("   elevated     → apps, files, shell, automation, coding (13+ features)")
-    print("   unrestricted → FULL control: Office, browser, coding, security,")
+    print("   standard     -> info, diagnostics, privacy, calc, tips (10+ features)")
+    print("   elevated     -> apps, files, shell, automation, coding (13+ features)")
+    print("   unrestricted -> FULL control: Office, browser, coding, security,")
     print("                   optimization, registry, drivers, 100+ features")
     perm = input("   Choose [standard/elevated/unrestricted]: ").strip().lower()
     perm = _resolve_perm(perm) if perm else "standard"
@@ -4943,7 +4943,7 @@ def install_wizard():
         "theme":         "dark",
     })
     save_config()
-    print(f"\033[92m◈ Identity confirmed: {codename}  (clearance: {perm})\033[0m")
+    print(f"\033[92m[+] Identity confirmed: {codename}  (clearance: {perm})\033[0m")
 
     print("\n6. Installing dependencies…")
     deps = {
@@ -4957,9 +4957,9 @@ def install_wizard():
         try:
             __import__('subprocess').run([sys.executable,"-m","pip","install",dep,"-q"],
                            capture_output=True)
-            print(f"\033[92m  ◈ {label}\033[0m")
+            print(f"\033[92m  [+] {label}\033[0m")
         except Exception as e:
-            print(f"\033[93m  ⚠ {label}: {e}\033[0m")
+            print(f"\033[93m  [!] {label}: {e}\033[0m")
 
     print("\n7. Acquiring AI engine…")
     exe = get_llama_exe()
@@ -4976,12 +4976,12 @@ def install_wizard():
             with zipfile.ZipFile(zp) as z:
                 z.extractall(BIN_DIR)
             os.remove(zp)
-            print("\033[92m  ◈ Engine installed.\033[0m")
+            print("\033[92m  [+] Engine installed.\033[0m")
         except Exception as e:
-            print(f"\033[91m  ✗ Engine download failed: {e}\033[0m")
+            print(f"\033[91m  [x] Engine download failed: {e}\033[0m")
             sys.exit(1)
     else:
-        print("\033[92m  ◈ Already installed.\033[0m")
+        print("\033[92m  [+] Already installed.\033[0m")
 
     print("\n8. Downloading neural model (~280 MB)…")
     model_path = os.path.join(MODELS_DIR, DEFAULT_MODEL)
@@ -4990,15 +4990,15 @@ def install_wizard():
             def reporthook(c, bs, tot):
                 if tot > 0:
                     pct = int(c*bs*100/tot)
-                    bar = "█"*(pct//5) + "░"*(20-pct//5)
+                    bar = "#"*(pct//5) + "-"*(20-pct//5)
                     print(f"\r  [{bar}] {pct}%", end="", flush=True)
             urllib.request.urlretrieve(MODEL_URL, model_path, reporthook)
-            print("\n\033[92m  ◈ Neural model loaded.\033[0m")
+            print("\n\033[92m  [+] Neural model loaded.\033[0m")
         except Exception as e:
-            print(f"\n\033[91m  ✗ Model download failed: {e}\033[0m")
+            print(f"\n\033[91m  [x] Model download failed: {e}\033[0m")
             sys.exit(1)
     else:
-        print("\033[92m  ◈ Already loaded.\033[0m")
+        print("\033[92m  [+] Already loaded.\033[0m")
 
     print("\n9. Configuring startup sequence (Registry)…")
     try:
@@ -5014,15 +5014,15 @@ def install_wizard():
             winreg.SetValueEx(key, "OMG_AI", 0, winreg.REG_SZ, f'pythonw "{os.path.abspath(__file__)}"')
             
         winreg.CloseKey(key)
-        print(f"\033[92m  ◈ Registry startup registered.\033[0m")
+        print(f"\033[92m  [+] Registry startup registered.\033[0m")
     except Exception as e:
-        print(f"\033[93m  ⚠ Startup registry failed: {e}\033[0m")
+        print(f"\033[93m  [!] Startup registry failed: {e}\033[0m")
 
-    print("\n\033[96m" + "═"*62)
+    print("\n\033[96m" + "="*62)
     print(f"  INSTALLATION COMPLETE, {codename.upper()}.")
     print(f"  Run:  python omg_ai.py")
-    print(f"  Hotkey: Ctrl+Space  ◈  Clearance: {perm.upper()}")
-    print("═"*62 + "\033[0m\n")
+    print(f"  Hotkey: Ctrl+Space  [+]  Clearance: {perm.upper()}")
+    print("="*62 + "\033[0m\n")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # ENTRY POINT
