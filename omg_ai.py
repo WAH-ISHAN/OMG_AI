@@ -100,6 +100,7 @@ tray_icon      = None
 _voice_queue   = []
 _voice_lock    = threading.Lock()
 _bg_tasks      = {}
+_app_instance  = None
 
 # ──────────────────────────────────────────────────────────────────────────────
 # OPTIONAL IMPORTS
@@ -3342,6 +3343,7 @@ def parse_command(text: str) -> str | None:
                 "◈  STANDARD CLEARANCE COMMANDS  (10+ features)\n"+"═"*55+"\n"
                 "  /help [s|e|u|all]   — this help menu\n"
                 "  /status             — full system diagnostics\n"
+                "  /agents             — launch Enhanced Agent GUI\n"
                 "  /time               — date & time reference\n"
                 "  /weather            — atmospheric conditions\n"
                 "  /net                — network info & public IP\n"
@@ -3545,6 +3547,12 @@ def parse_command(text: str) -> str | None:
     # ─────────────────────────────────────────────────────────────────────────
     #  STANDARD COMMANDS
     # ─────────────────────────────────────────────────────────────────────────
+    if cmd == "/agents":
+        if _app_instance:
+            _app_instance.root.after(0, _app_instance.open_enhanced_agents_gui)
+            return "Launching Enhanced Agent Interface..."
+        return "Error: App instance not found."
+
     if cmd in ("/status","/sysinfo"):      return core.get_sysinfo()
     if cmd == "/time":                     return core.get_time()
     if cmd == "/weather":                  return core.get_weather_local()
@@ -4129,6 +4137,8 @@ def get_theme():
 
 class AssistantApp:
     def __init__(self, root: tk.Tk):
+        global _app_instance
+        _app_instance = self
         self.root  = root
         self.theme = get_theme()
         self._live_widgets = {}
@@ -4179,6 +4189,12 @@ class AssistantApp:
             text_color=t["sys_fg"], cursor="hand2")
         self.theme_btn.pack(side="right", padx=20)
         self.theme_btn.bind("<Button-1>", self._cycle_theme)
+
+        self.agents_btn = ctk.CTkLabel(
+            self.top_bar, text="🤖 Agents", font=("Segoe UI", 14, "bold"),
+            text_color=t["sys_fg"], cursor="hand2")
+        self.agents_btn.pack(side="right", padx=20)
+        self.agents_btn.bind("<Button-1>", self.open_enhanced_agents_gui)
 
         # ── HOME STATE ──
         self.home_frame = ctk.CTkFrame(self.main_container, fg_color=t["bg"])
@@ -4351,13 +4367,22 @@ class AssistantApp:
         self.voice_lbl.configure(
             text="🔊" if CONFIG["voice_enabled"] else "🔇")
 
+    def open_enhanced_agents_gui(self, _=None):
+        try:
+            import omg_ai_enhanced_gui
+            win = omg_ai_enhanced_gui.EnhancedOMGAIWindow(parent=self.root)
+            win.deiconify()
+            self._append("system", "[AGENTS]", "Launched Enhanced Agent System Interface.")
+        except Exception as e:
+            self._append("warn", "[ERROR]", f"Failed to launch Agents GUI: {e}")
+
     def _autocomplete(self, _=None):
         text = self.entry.get()
         if not text.startswith("/"):
             return
         commands = [
             "/help","/status","/time","/weather","/net","/battery","/uptime",
-            "/calc","/tips","/disk","/privacy","/cpu","/temps","/ping",
+            "/agents","/calc","/tips","/disk","/privacy","/cpu","/temps","/ping",
             "/open","/close","/ps","/ls","/cat","/find","/grep","/env",
             "/hash","/clip","/clip-set","/ports","/py","/startup-apps",
             "/run","/search","/write","/append","/delete","/copy","/move",
