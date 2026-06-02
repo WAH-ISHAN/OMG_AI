@@ -28,7 +28,10 @@ import random, platform, signal
 # BASE PATHS
 # ──────────────────────────────────────────────────────────────────────────────
 
-BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR  = os.path.join(BASE_DIR, "models")
 BIN_DIR     = os.path.join(BASE_DIR, "bin")
 LOGS_DIR    = os.path.join(BASE_DIR, "logs")
@@ -3297,13 +3300,19 @@ def start_server() -> bool:
         return False
     threads = min(psutil.cpu_count() if HAS_PSUTIL else 4, 8)
     cmd = [exe, "-m", model, "--port", str(LLAMA_PORT),
-           "-c", "4096", "--threads", str(threads), "--no-mmap",
-           "--log-disable"]
+           "-c", "4096", "--threads", str(threads), "--no-mmap"]
     flags = subprocess.CREATE_NO_WINDOW if sys.platform=="win32" else 0
+    
+    log_path = os.path.join(LOGS_DIR, "llama_server.log")
+    log_file = open(log_path, "w")
     server_process = subprocess.Popen(
-        cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        cmd, stdout=log_file, stderr=subprocess.STDOUT,
         creationflags=flags)
+    
     for _ in range(40):
+        if server_process.poll() is not None:
+            log_file.close()
+            return False
         try:
             with urllib.request.urlopen(f"{LLAMA_HOST}/health", timeout=1) as r:
                 if r.status == 200:

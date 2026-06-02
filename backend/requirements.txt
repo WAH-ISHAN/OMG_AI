@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+pywebview
+pydantic
+llama-cpp-python
+chromadb
+sentence-transformers
+SpeechRecognition
+pywin32
+pyttsx3
+psutil
