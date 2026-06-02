@@ -4752,7 +4752,6 @@ def install_wizard():
         import winreg
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_SET_VALUE)
         
-        import sys
         if getattr(sys, 'frozen', False):
             # If compiled via pyinstaller
             exe_path = sys.executable
