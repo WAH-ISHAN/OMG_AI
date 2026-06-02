@@ -5,7 +5,7 @@
 ---
 
 ## 🔒 100% Privacy Guaranteed
-Unlike cloud-based assistants (like ChatGPT or Copilot), **OMG_AI runs offline** on your machine using a local LLM (Qwen 2.5 via `llama.cpp`). 
+Unlike cloud-based assistants (like ChatGPT or Copilot), **OMG_AI runs offline** on your machine using a powerful local AI engine. 
 - **Zero data tracking:** Your chats, files, and system information never leave your computer.
 - **No accounts required:** No sign-ups, no API keys, and no subscriptions.
 
