@@ -4891,25 +4891,32 @@ def install_wizard():
     print("  Background Agent  *  Full Laptop Control  *  100% Private")
     print("  130+ Commands  *  10 Standard  *  13 Elevated  *  100+ Unrestricted")
     print("="*62 + "\033[0m\n")
+    try:
+        name     = input("1. Your name: ").strip() or "Sir"
+        codename = input(f"2. Codename (Enter for '{name}'): ").strip() or name
 
-    name     = input("1. Your name: ").strip() or "Sir"
-    codename = input(f"2. Codename (Enter for '{name}'): ").strip() or name
+        print("\n3. Clearance level:")
+        print("   standard     -> info, diagnostics, privacy, calc, tips (10+ features)")
+        print("   elevated     -> apps, files, shell, automation, coding (13+ features)")
+        print("   unrestricted -> FULL control: Office, browser, coding, security,")
+        print("                   optimization, registry, drivers, 100+ features")
+        perm = input("   Choose [standard/elevated/unrestricted]: ").strip().lower()
+        perm = _resolve_perm(perm) if perm else "unrestricted"
+        if perm not in ("standard","elevated","unrestricted"):
+            perm = "unrestricted"
 
-    print("\n3. Clearance level:")
-    print("   standard     -> info, diagnostics, privacy, calc, tips (10+ features)")
-    print("   elevated     -> apps, files, shell, automation, coding (13+ features)")
-    print("   unrestricted -> FULL control: Office, browser, coding, security,")
-    print("                   optimization, registry, drivers, 100+ features")
-    perm = input("   Choose [standard/elevated/unrestricted]: ").strip().lower()
-    perm = _resolve_perm(perm) if perm else "standard"
-    if perm not in ("standard","elevated","unrestricted"):
-        perm = "standard"
-
-    print("\n4. Optional: Gmail credentials for /email")
-    email_addr = input("   Gmail (leave blank to skip): ").strip()
-    email_pass = ""
-    if email_addr:
-        email_pass = input("   App password: ").strip()
+        print("\n4. Optional: Gmail credentials for /email")
+        email_addr = input("   Gmail (leave blank to skip): ").strip()
+        email_pass = ""
+        if email_addr:
+            email_pass = input("   App password: ").strip()
+    except EOFError:
+        name = "Sir"
+        codename = "Sir"
+        perm = "unrestricted"
+        email_addr = ""
+        email_pass = ""
+        print("\n[!] Running in automated mode. Default settings applied.")
 
     print("\n5. Scanning hardware…")
     laptop_model = "Unknown"
@@ -4961,7 +4968,7 @@ def install_wizard():
         except Exception as e:
             print(f"\033[93m  [!] {label}: {e}\033[0m")
 
-    print("\n7. Acquiring AI engine…")
+    print("\n7. Deploying Core AI Engine…")
     exe = get_llama_exe()
     if not os.path.exists(exe):
         try:
@@ -4983,7 +4990,7 @@ def install_wizard():
     else:
         print("\033[92m  [+] Already installed.\033[0m")
 
-    print("\n8. Downloading neural model (~280 MB)…")
+    print("\n8. Loading Neural Modules (~280 MB)…")
     model_path = os.path.join(MODELS_DIR, DEFAULT_MODEL)
     if not os.path.exists(model_path):
         try:
