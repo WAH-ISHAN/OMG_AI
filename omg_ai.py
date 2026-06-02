@@ -4800,8 +4800,11 @@ class GUISetupWizard(ctk.CTkToplevel):
         for dep, label in deps.items():
             self.update_status(f"Installing {label}...", current_pct)
             try:
-                __import__('subprocess').run([sys.executable, "-m", "pip", "install", dep, "-q"], 
-                               capture_output=True, creationflags=0x08000000 if sys.platform=="win32" else 0)
+                if not getattr(sys, 'frozen', False):
+                    __import__('subprocess').run([sys.executable, "-m", "pip", "install", dep, "-q"], 
+                                   capture_output=True, creationflags=0x08000000 if sys.platform=="win32" else 0)
+                else:
+                    time.sleep(0.1) # Simulate progress for frozen executable
             except Exception: pass
             current_pct += step_inc
             
@@ -4962,8 +4965,11 @@ def install_wizard():
     }
     for dep, label in deps.items():
         try:
-            __import__('subprocess').run([sys.executable,"-m","pip","install",dep,"-q"],
-                           capture_output=True)
+            if not getattr(sys, 'frozen', False):
+                __import__('subprocess').run([sys.executable,"-m","pip","install",dep,"-q"],
+                               capture_output=True)
+            else:
+                time.sleep(0.1)
             print(f"\033[92m  [+] {label}\033[0m")
         except Exception as e:
             print(f"\033[93m  [!] {label}: {e}\033[0m")
