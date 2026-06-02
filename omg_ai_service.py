@@ -154,7 +154,7 @@ TASK_XML = """\
     <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
     <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
     <RestartOnFailure>
-      <Interval>PT30S</Interval><Count>9999</Count>
+      <Interval>PT1M</Interval><Count>9999</Count>
     </RestartOnFailure>
     <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
     <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
