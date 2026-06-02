@@ -4147,79 +4147,74 @@ class AssistantApp:
         t = self.theme
 
         self.root.title(f"OMG_AI  v{CURRENT_VER}  ◈  {CODENAME}")
-        self.root.geometry("520x780")
+        self.root.geometry("800x800")
         self.root.configure(bg=t["bg"])
-        self.root.attributes("-topmost", True)
-        self.root.attributes("-alpha", 0.96)
+        self.root.attributes("-topmost", False)
+        self.root.attributes("-alpha", 1.0)
         self.root.protocol("WM_DELETE_WINDOW", self.hide_to_tray)
         self.root.resizable(True, True)
-        self.root.minsize(420, 600)
+        self.root.minsize(600, 600)
+        
+        self.in_chat_state = False
 
-        # ── TOP BAR ──
-        top = tk.Frame(self.root, bg=t["header_bg"])
-        top.pack(fill=tk.X)
-        tk.Frame(top, bg=t["accent"], height=2).pack(fill=tk.X)
-        hdr = tk.Frame(top, bg=t["header_bg"], pady=6)
-        hdr.pack(fill=tk.X)
+        # ── MAIN CONTAINER ──
+        self.main_container = tk.Frame(self.root, bg=t["bg"])
+        self.main_container.pack(fill=tk.BOTH, expand=True)
 
-        tk.Label(hdr, text="◉", font=("Courier New",14,"bold"),
-                 fg=t["accent"], bg=t["header_bg"]).pack(side=tk.LEFT, padx=(10,4))
-        tk.Label(hdr, text="OMG_AI",
-                 font=("Courier New",13,"bold"),
-                 fg=t["accent"], bg=t["header_bg"]).pack(side=tk.LEFT)
-        tk.Label(hdr, text=f"  v{CURRENT_VER}  ▸  {CODENAME}",
-                 font=("Courier New",8),
-                 fg=t["sys_fg"], bg=t["header_bg"]).pack(side=tk.LEFT)
-
-        # Perm badge
+        # ── TOP BAR (Minimal) ──
+        self.top_bar = tk.Frame(self.main_container, bg=t["bg"], pady=10)
+        self.top_bar.pack(fill=tk.X)
+        
         self.perm_lbl = tk.Label(
-            hdr, text=f"[{CONFIG.get('permission','standard').upper()}]",
-            font=("Courier New",8,"bold"),
-            fg=t["accent2"], bg=t["header_bg"], cursor="hand2")
-        self.perm_lbl.pack(side=tk.RIGHT, padx=(0,6))
+            self.top_bar, text=f"Model: OMG_AI 4.0 ({CONFIG.get('permission','standard').upper()}) ▾",
+            font=("Segoe UI", 11, "bold"),
+            fg=t["sys_fg"], bg=t["bg"], cursor="hand2")
+        self.perm_lbl.pack(side=tk.LEFT, padx=20)
         self.perm_lbl.bind("<Button-1>", self._cycle_perm)
 
-        # Theme toggle
         self.theme_btn = tk.Label(
-            hdr, text="◐", font=("Courier New",11),
-            fg=t["sys_fg"], bg=t["header_bg"], cursor="hand2")
-        self.theme_btn.pack(side=tk.RIGHT, padx=(0,4))
+            self.top_bar, text="◐", font=("Segoe UI", 14),
+            fg=t["sys_fg"], bg=t["bg"], cursor="hand2")
+        self.theme_btn.pack(side=tk.RIGHT, padx=20)
         self.theme_btn.bind("<Button-1>", self._cycle_theme)
 
-        tk.Frame(self.root, bg=t["accent"], height=1).pack(fill=tk.X)
+        # ── HOME STATE ──
+        self.home_frame = tk.Frame(self.main_container, bg=t["bg"])
+        
+        tk.Frame(self.home_frame, bg=t["bg"], height=150).pack()
+        
+        greeting = f"✧ Good evening, {CODENAME}"
+        tk.Label(self.home_frame, text=greeting,
+                 font=("Segoe UI", 28, "bold"), fg=t["fg"], bg=t["bg"]).pack(pady=20)
+                 
+        tk.Label(self.home_frame, text="How can I help you today?",
+                 font=("Segoe UI", 16), fg=t["sys_fg"], bg=t["bg"]).pack(pady=5)
+                 
+        quick_frame = tk.Frame(self.home_frame, bg=t["bg"])
+        quick_frame.pack(pady=40)
+        
+        for label, cmd in [
+            ("</> Code", "/code"), ("🎓 Learn", "/learn"),
+            ("📈 Strategize", "/status"), ("⚙️ Drivers", "/drivers"),
+            ("🛡️ Privacy", "/privacy-scan")
+        ]:
+            btn = tk.Button(quick_frame, text=label,
+                            font=("Segoe UI", 10),
+                            bg=t["bg2"], fg=t["fg"],
+                            bd=1, relief="solid", highlightbackground=t["border"],
+                            activebackground=t["select_bg"],
+                            command=lambda c=cmd: self._quick_cmd(c),
+                            cursor="hand2", padx=15, pady=8)
+            btn.pack(side=tk.LEFT, padx=10)
 
-        # ── LIVE STATS BAR ──
-        stats_frame = tk.Frame(self.root, bg=t["bg2"], pady=2)
-        stats_frame.pack(fill=tk.X)
-        self.cpu_var  = tk.StringVar(value="CPU: --")
-        self.ram_var  = tk.StringVar(value="RAM: --")
-        self.bat_var  = tk.StringVar(value="BAT: --")
-        for var, padx in [(self.cpu_var,(8,4)),(self.ram_var,(4,4)),(self.bat_var,(4,8))]:
-            tk.Label(stats_frame, textvariable=var,
-                     font=("Courier New",7,"bold"),
-                     fg=t["cmd_fg"], bg=t["bg2"],
-                     padx=padx[0]).pack(side=tk.LEFT)
-        self.perm_live = tk.Label(stats_frame,
-                                  text=f"🔒 {CONFIG.get('permission','STANDARD').upper()}",
-                                  font=("Courier New",7,"bold"),
-                                  fg=t["accent2"], bg=t["bg2"])
-        self.perm_live.pack(side=tk.RIGHT, padx=(0,8))
-        tk.Frame(self.root, bg=t["border"], height=1).pack(fill=tk.X)
-
-        # ── TICKER ──
-        self.ticker_var = tk.StringVar(value="SYSTEM READY  ◈  LOCAL AI  ◈  ALL SYSTEMS NOMINAL")
-        ticker = tk.Label(self.root, textvariable=self.ticker_var,
-                          font=("Courier New",7), fg=t["sys_fg"], bg=t["bg2"],
-                          anchor="w", padx=8, pady=1)
-        ticker.pack(fill=tk.X)
-        tk.Frame(self.root, bg=t["border"], height=1).pack(fill=tk.X)
-
-        # ── CHAT ──
+        # ── CHAT STATE ──
+        self.chat_frame = tk.Frame(self.main_container, bg=t["bg"])
+        
         self.chat = scrolledtext.ScrolledText(
-            self.root, wrap=tk.WORD,
+            self.chat_frame, wrap=tk.WORD,
             bg=t["bg"], fg=t["fg"],
-            font=("Courier New",10),
-            bd=0, padx=14, pady=12,
+            font=("Segoe UI", 11),
+            bd=0, padx=40, pady=20,
             insertbackground=t["fg"],
             selectbackground=t["select_bg"],
             selectforeground=t["fg"])
@@ -4227,49 +4222,35 @@ class AssistantApp:
         self.chat.config(state=tk.DISABLED)
 
         for tag, fg, font_style in [
-            ("user",   t["user_fg"],  ("Courier New",10,"bold")),
-            ("ai",     t["ai_fg"],    ("Courier New",10,"bold")),
-            ("system", t["sys_fg"],   ("Courier New",9,"italic")),
-            ("cmd",    t["cmd_fg"],   ("Courier New",10)),
-            ("warn",   t["warn_fg"],  ("Courier New",10,"bold")),
-            ("divider",t["border"],   ("Courier New",7)),
+            ("user",   t["user_fg"],  ("Segoe UI", 11, "bold")),
+            ("ai",     t["ai_fg"],    ("Segoe UI", 11)),
+            ("system", t["sys_fg"],   ("Segoe UI", 10, "italic")),
+            ("cmd",    t["cmd_fg"],   ("Consolas", 11)),
+            ("warn",   t["warn_fg"],  ("Segoe UI", 11, "bold")),
+            ("divider",t["border"],   ("Segoe UI", 7)),
         ]:
             self.chat.tag_config(tag, foreground=fg, font=font_style)
 
-        # ── BOTTOM QUICK CMDS ──
-        quick_frame = tk.Frame(self.root, bg=t["bg2"], pady=3)
-        quick_frame.pack(fill=tk.X)
-        for label, cmd in [
-            ("STATUS","/status"), ("SECURITY","/security"),
-            ("OPT-RAM","/opt-ram"), ("DRIVERS","/drivers"),
-            ("PRIVACY","/privacy-scan"),
-        ]:
-            btn = tk.Button(quick_frame, text=label,
-                            font=("Courier New",7,"bold"),
-                            bg=t["border"], fg=t["cmd_fg"],
-                            bd=0, relief="flat",
-                            activebackground=t["accent"],
-                            activeforeground=t["bg"],
-                            command=lambda c=cmd: self._quick_cmd(c),
-                            cursor="hand2", padx=6, pady=2)
-            btn.pack(side=tk.LEFT, padx=2, pady=2)
-
-        tk.Frame(self.root, bg=t["accent"], height=1).pack(fill=tk.X)
-
         # ── INPUT BAR ──
-        bar = tk.Frame(self.root, bg=t["bg2"], pady=7)
-        bar.pack(fill=tk.X)
-        tk.Label(bar, text="▸", font=("Courier New",12,"bold"),
-                 fg=t["accent"], bg=t["bg2"]).pack(side=tk.LEFT, padx=(8,2))
+        input_container = tk.Frame(self.main_container, bg=t["bg"], pady=20)
+        input_container.pack(fill=tk.X, side=tk.BOTTOM)
+        
+        center_input = tk.Frame(input_container, bg=t["bg"])
+        center_input.pack(expand=True)
+        
+        self.bar = tk.Frame(center_input, bg=t["input_bg"], padx=15, pady=10, 
+                            bd=1, relief="solid", highlightbackground=t["border"])
+        self.bar.pack(fill=tk.X, ipadx=50)
+        
+        tk.Label(self.bar, text="+", font=("Segoe UI", 18),
+                 fg=t["sys_fg"], bg=t["input_bg"], cursor="hand2").pack(side=tk.LEFT, padx=(0,10))
+                 
         self.entry = tk.Entry(
-            bar, bg=t["input_bg"], fg=t["user_fg"],
-            font=("Courier New",11),
-            insertbackground=t["accent"],
-            bd=0, relief="flat",
-            highlightthickness=1,
-            highlightcolor=t["accent"],
-            highlightbackground=t["border"])
-        self.entry.pack(side=tk.LEFT, expand=True, fill=tk.X, ipady=6, padx=(2,4))
+            self.bar, bg=t["input_bg"], fg=t["fg"],
+            font=("Segoe UI", 12),
+            insertbackground=t["fg"],
+            bd=0, relief="flat", highlightthickness=0)
+        self.entry.pack(side=tk.LEFT, expand=True, fill=tk.X, ipady=5, padx=5)
         self.entry.bind("<Return>", self.handle_input)
         self.entry.bind("<Up>",     self._history_up)
         self.entry.bind("<Down>",   self._history_down)
@@ -4277,41 +4258,29 @@ class AssistantApp:
         self.entry.config(state=tk.DISABLED)
 
         self.send_btn = tk.Button(
-            bar, text="SEND ▸",
-            font=("Courier New",9,"bold"),
-            bg=t["btn_bg"], fg=t["btn_fg"],
+            self.bar, text="↑",
+            font=("Segoe UI", 14, "bold"),
+            bg=t["sys_fg"], fg=t["bg"],
             bd=0, relief="flat",
-            activebackground=t["sys_fg"],
-            activeforeground=t["bg"],
+            activebackground=t["accent"],
             command=self.handle_input,
-            cursor="hand2", padx=10, pady=5)
-        self.send_btn.pack(side=tk.RIGHT, padx=(0,6))
+            cursor="hand2", padx=8, pady=0)
+        self.send_btn.pack(side=tk.RIGHT, padx=(10,0))
         self.send_btn.config(state=tk.DISABLED)
 
-        # Voice indicator
         self.voice_lbl = tk.Label(
-            bar, text="🔊" if CONFIG.get("voice_enabled",True) else "🔇",
-            font=("Courier New",10), fg=t["sys_fg"], bg=t["bg2"],
+            self.bar, text="🔊" if CONFIG.get("voice_enabled",True) else "🔇",
+            font=("Segoe UI", 12), fg=t["sys_fg"], bg=t["input_bg"],
             cursor="hand2")
-        self.voice_lbl.pack(side=tk.RIGHT, padx=(0,4))
+        self.voice_lbl.pack(side=tk.RIGHT, padx=(10,5))
         self.voice_lbl.bind("<Button-1>", self._toggle_voice)
 
-        # ── STATUS BAR ──
-        self.status_var = tk.StringVar(value="INITIALISING…")
-        status_bar = tk.Frame(self.root, bg=t["status_bg"], pady=3)
-        status_bar.pack(fill=tk.X)
-        tk.Label(status_bar, text="◈",
-                 font=("Courier New",8), fg=t["accent"],
-                 bg=t["status_bg"]).pack(side=tk.LEFT, padx=(8,2))
-        tk.Label(status_bar, textvariable=self.status_var,
-                 font=("Courier New",8), fg=t["sys_fg"],
-                 bg=t["status_bg"]).pack(side=tk.LEFT)
-
+        self.status_var = tk.StringVar(value="")
+        
         self._input_hist   = []
         self._input_hist_i = -1
 
-        self._start_ticker()
-        self._start_live_stats()
+        self.home_frame.pack(fill=tk.BOTH, expand=True)
 
     # ── LIVE STATS UPDATE ─────────────────────────────────────────────────────
 
@@ -4476,8 +4445,8 @@ class AssistantApp:
 
     def update_perm_label(self):
         perm = CONFIG.get("permission","standard")
-        self.perm_lbl.config(text=f"[{perm.upper()}]")
-        self.perm_live.config(text=f"🔒 {perm.upper()}")
+        if hasattr(self, "perm_lbl"):
+            self.perm_lbl.config(text=f"Model: OMG_AI 4.0 ({perm.upper()}) ▾")
 
     # ── BOOT SEQUENCE ─────────────────────────────────────────────────────────
 
@@ -4541,7 +4510,14 @@ class AssistantApp:
 
     # ── INPUT HANDLING ────────────────────────────────────────────────────────
 
+    def _transition_to_chat(self):
+        if getattr(self, "in_chat_state", False) == False:
+            self.home_frame.pack_forget()
+            self.chat_frame.pack(fill=tk.BOTH, expand=True)
+            self.in_chat_state = True
+
     def handle_input(self, _=None):
+        self._transition_to_chat()
         user_input = self.entry.get().strip()
         if not user_input:
             return
