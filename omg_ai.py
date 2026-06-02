@@ -20,6 +20,7 @@ import tempfile, glob, re, socket, struct, base64, ctypes
 from datetime import datetime, timedelta
 from pathlib import Path
 import tkinter as tk
+import customtkinter as ctk
 from tkinter import scrolledtext, messagebox, ttk, filedialog, simpledialog
 import random, platform, signal
 
@@ -4148,49 +4149,46 @@ class AssistantApp:
 
         self.root.title(f"OMG_AI  v{CURRENT_VER}  ◈  {CODENAME}")
         self.root.geometry("800x800")
-        self.root.configure(bg=t["bg"])
         self.root.attributes("-topmost", False)
-        self.root.attributes("-alpha", 1.0)
         self.root.protocol("WM_DELETE_WINDOW", self.hide_to_tray)
-        self.root.resizable(True, True)
         self.root.minsize(600, 600)
         
         self.in_chat_state = False
 
         # ── MAIN CONTAINER ──
-        self.main_container = tk.Frame(self.root, bg=t["bg"])
-        self.main_container.pack(fill=tk.BOTH, expand=True)
+        self.main_container = ctk.CTkFrame(self.root, fg_color=t["bg"])
+        self.main_container.pack(fill="both", expand=True)
 
         # ── TOP BAR (Minimal) ──
-        self.top_bar = tk.Frame(self.main_container, bg=t["bg"], pady=10)
-        self.top_bar.pack(fill=tk.X)
+        self.top_bar = ctk.CTkFrame(self.main_container, fg_color=t["bg"], height=50)
+        self.top_bar.pack(fill="x", pady=10)
         
-        self.perm_lbl = tk.Label(
+        self.perm_lbl = ctk.CTkLabel(
             self.top_bar, text=f"Model: OMG_AI 4.0 ({CONFIG.get('permission','standard').upper()}) ▾",
-            font=("Segoe UI", 11, "bold"),
-            fg=t["sys_fg"], bg=t["bg"], cursor="hand2")
-        self.perm_lbl.pack(side=tk.LEFT, padx=20)
+            font=("Segoe UI", 14, "bold"),
+            text_color=t["sys_fg"], cursor="hand2")
+        self.perm_lbl.pack(side="left", padx=20)
         self.perm_lbl.bind("<Button-1>", self._cycle_perm)
 
-        self.theme_btn = tk.Label(
-            self.top_bar, text="◐", font=("Segoe UI", 14),
-            fg=t["sys_fg"], bg=t["bg"], cursor="hand2")
-        self.theme_btn.pack(side=tk.RIGHT, padx=20)
+        self.theme_btn = ctk.CTkLabel(
+            self.top_bar, text="◐", font=("Segoe UI", 18),
+            text_color=t["sys_fg"], cursor="hand2")
+        self.theme_btn.pack(side="right", padx=20)
         self.theme_btn.bind("<Button-1>", self._cycle_theme)
 
         # ── HOME STATE ──
-        self.home_frame = tk.Frame(self.main_container, bg=t["bg"])
+        self.home_frame = ctk.CTkFrame(self.main_container, fg_color=t["bg"])
         
-        tk.Frame(self.home_frame, bg=t["bg"], height=150).pack()
+        ctk.CTkFrame(self.home_frame, fg_color="transparent", height=150).pack()
         
         greeting = f"✧ Good evening, {CODENAME}"
-        tk.Label(self.home_frame, text=greeting,
-                 font=("Segoe UI", 28, "bold"), fg=t["fg"], bg=t["bg"]).pack(pady=20)
+        ctk.CTkLabel(self.home_frame, text=greeting,
+                 font=("Segoe UI", 32, "bold"), text_color=t["fg"]).pack(pady=20)
                  
-        tk.Label(self.home_frame, text="How can I help you today?",
-                 font=("Segoe UI", 16), fg=t["sys_fg"], bg=t["bg"]).pack(pady=5)
+        ctk.CTkLabel(self.home_frame, text="How can I help you today?",
+                 font=("Segoe UI", 18), text_color=t["sys_fg"]).pack(pady=5)
                  
-        quick_frame = tk.Frame(self.home_frame, bg=t["bg"])
+        quick_frame = ctk.CTkFrame(self.home_frame, fg_color="transparent")
         quick_frame.pack(pady=40)
         
         for label, cmd in [
@@ -4198,81 +4196,73 @@ class AssistantApp:
             ("📈 Strategize", "/status"), ("⚙️ Drivers", "/drivers"),
             ("🛡️ Privacy", "/privacy-scan")
         ]:
-            btn = tk.Button(quick_frame, text=label,
-                            font=("Segoe UI", 10),
-                            bg=t["bg2"], fg=t["fg"],
-                            bd=1, relief="solid", highlightbackground=t["border"],
-                            activebackground=t["select_bg"],
+            btn = ctk.CTkButton(quick_frame, text=label,
+                            font=("Segoe UI", 14),
+                            fg_color=t["bg2"], text_color=t["fg"],
+                            border_width=1, border_color=t["border"],
+                            hover_color=t["select_bg"],
                             command=lambda c=cmd: self._quick_cmd(c),
-                            cursor="hand2", padx=15, pady=8)
-            btn.pack(side=tk.LEFT, padx=10)
+                            cursor="hand2", width=100, height=40, corner_radius=8)
+            btn.pack(side="left", padx=10)
 
         # ── CHAT STATE ──
-        self.chat_frame = tk.Frame(self.main_container, bg=t["bg"])
+        self.chat_frame = ctk.CTkFrame(self.main_container, fg_color=t["bg"])
         
-        self.chat = scrolledtext.ScrolledText(
-            self.chat_frame, wrap=tk.WORD,
-            bg=t["bg"], fg=t["fg"],
-            font=("Segoe UI", 11),
-            bd=0, padx=40, pady=20,
-            insertbackground=t["fg"],
-            selectbackground=t["select_bg"],
-            selectforeground=t["fg"])
-        self.chat.pack(expand=True, fill=tk.BOTH)
-        self.chat.config(state=tk.DISABLED)
+        self.chat = ctk.CTkTextbox(
+            self.chat_frame, wrap="word",
+            fg_color=t["bg"], text_color=t["fg"],
+            font=("Segoe UI", 14),
+            border_width=0)
+        self.chat.pack(expand=True, fill="both", padx=40, pady=20)
+        self.chat.configure(state="disabled")
 
-        for tag, fg, font_style in [
-            ("user",   t["user_fg"],  ("Segoe UI", 11, "bold")),
-            ("ai",     t["ai_fg"],    ("Segoe UI", 11)),
-            ("system", t["sys_fg"],   ("Segoe UI", 10, "italic")),
-            ("cmd",    t["cmd_fg"],   ("Consolas", 11)),
-            ("warn",   t["warn_fg"],  ("Segoe UI", 11, "bold")),
-            ("divider",t["border"],   ("Segoe UI", 7)),
-        ]:
-            self.chat.tag_config(tag, foreground=fg, font=font_style)
+        self.chat.tag_config("user", foreground=t["user_fg"], font=("Segoe UI", 14, "bold"))
+        self.chat.tag_config("ai", foreground=t["ai_fg"], font=("Segoe UI", 14))
+        self.chat.tag_config("system", foreground=t["sys_fg"], font=("Segoe UI", 12, "italic"))
+        self.chat.tag_config("cmd", foreground=t["cmd_fg"], font=("Consolas", 14))
+        self.chat.tag_config("warn", foreground=t["warn_fg"], font=("Segoe UI", 14, "bold"))
+        self.chat.tag_config("divider", foreground=t["border"], font=("Segoe UI", 8))
 
         # ── INPUT BAR ──
-        input_container = tk.Frame(self.main_container, bg=t["bg"], pady=20)
-        input_container.pack(fill=tk.X, side=tk.BOTTOM)
+        input_container = ctk.CTkFrame(self.main_container, fg_color=t["bg"])
+        input_container.pack(fill="x", side="bottom", pady=20)
         
-        center_input = tk.Frame(input_container, bg=t["bg"])
+        center_input = ctk.CTkFrame(input_container, fg_color="transparent")
         center_input.pack(expand=True)
         
-        self.bar = tk.Frame(center_input, bg=t["input_bg"], padx=15, pady=10, 
-                            bd=1, relief="solid", highlightbackground=t["border"])
-        self.bar.pack(fill=tk.X, ipadx=50)
+        self.bar = ctk.CTkFrame(center_input, fg_color=t["input_bg"],
+                            border_width=1, border_color=t["border"], corner_radius=12)
+        self.bar.pack(fill="x", ipadx=50, ipady=5)
         
-        tk.Label(self.bar, text="+", font=("Segoe UI", 18),
-                 fg=t["sys_fg"], bg=t["input_bg"], cursor="hand2").pack(side=tk.LEFT, padx=(0,10))
+        ctk.CTkLabel(self.bar, text="+", font=("Segoe UI", 24),
+                 text_color=t["sys_fg"], cursor="hand2").pack(side="left", padx=(15,10))
                  
-        self.entry = tk.Entry(
-            self.bar, bg=t["input_bg"], fg=t["fg"],
-            font=("Segoe UI", 12),
-            insertbackground=t["fg"],
-            bd=0, relief="flat", highlightthickness=0)
-        self.entry.pack(side=tk.LEFT, expand=True, fill=tk.X, ipady=5, padx=5)
+        self.entry = ctk.CTkEntry(
+            self.bar, fg_color=t["input_bg"], text_color=t["fg"],
+            font=("Segoe UI", 16),
+            border_width=0, placeholder_text="Ask OMG_AI anything...")
+        self.entry.pack(side="left", expand=True, fill="x", ipady=8, padx=5)
         self.entry.bind("<Return>", self.handle_input)
         self.entry.bind("<Up>",     self._history_up)
         self.entry.bind("<Down>",   self._history_down)
         self.entry.bind("<Tab>",    self._autocomplete)
-        self.entry.config(state=tk.DISABLED)
+        self.entry.configure(state="disabled")
 
-        self.send_btn = tk.Button(
+        self.send_btn = ctk.CTkButton(
             self.bar, text="↑",
-            font=("Segoe UI", 14, "bold"),
-            bg=t["sys_fg"], fg=t["bg"],
-            bd=0, relief="flat",
-            activebackground=t["accent"],
+            font=("Segoe UI", 18, "bold"),
+            fg_color=t["sys_fg"], text_color=t["bg"],
+            hover_color=t["accent"],
             command=self.handle_input,
-            cursor="hand2", padx=8, pady=0)
-        self.send_btn.pack(side=tk.RIGHT, padx=(10,0))
-        self.send_btn.config(state=tk.DISABLED)
+            cursor="hand2", width=36, height=36, corner_radius=18)
+        self.send_btn.pack(side="right", padx=(10,15), pady=8)
+        self.send_btn.configure(state="disabled")
 
-        self.voice_lbl = tk.Label(
+        self.voice_lbl = ctk.CTkLabel(
             self.bar, text="🔊" if CONFIG.get("voice_enabled",True) else "🔇",
-            font=("Segoe UI", 12), fg=t["sys_fg"], bg=t["input_bg"],
+            font=("Segoe UI", 18), text_color=t["sys_fg"],
             cursor="hand2")
-        self.voice_lbl.pack(side=tk.RIGHT, padx=(10,5))
+        self.voice_lbl.pack(side="right", padx=(10,5))
         self.voice_lbl.bind("<Button-1>", self._toggle_voice)
 
         self.status_var = tk.StringVar(value="")
@@ -4280,7 +4270,7 @@ class AssistantApp:
         self._input_hist   = []
         self._input_hist_i = -1
 
-        self.home_frame.pack(fill=tk.BOTH, expand=True)
+        self.home_frame.pack(fill="both", expand=True)
 
     # ── LIVE STATS UPDATE ─────────────────────────────────────────────────────
 
@@ -4303,7 +4293,7 @@ class AssistantApp:
                 except Exception:
                     pass
             perm = CONFIG.get("permission","standard")
-            self.perm_live.config(text=f"🔒 {perm.upper()}")
+            self.perm_live.configure(text=f"🔒 {perm.upper()}")
             self.root.after(3000, update)
         self.root.after(1000, update)
 
@@ -4329,7 +4319,7 @@ class AssistantApp:
     # ── UI INTERACTIONS ───────────────────────────────────────────────────────
 
     def _quick_cmd(self, cmd: str):
-        self.entry.delete(0, tk.END)
+        self.entry.delete(0, "end")
         self.entry.insert(0, cmd)
         self.handle_input()
 
@@ -4354,7 +4344,7 @@ class AssistantApp:
     def _toggle_voice(self, _=None):
         CONFIG["voice_enabled"] = not CONFIG.get("voice_enabled",True)
         save_config()
-        self.voice_lbl.config(
+        self.voice_lbl.configure(
             text="🔊" if CONFIG["voice_enabled"] else "🔇")
 
     def _autocomplete(self, _=None):
@@ -4380,7 +4370,7 @@ class AssistantApp:
         ]
         matches = [c for c in commands if c.startswith(text.lower())]
         if len(matches) == 1:
-            self.entry.delete(0, tk.END)
+            self.entry.delete(0, "end")
             self.entry.insert(0, matches[0] + " ")
         elif matches:
             self._append("system","[TAB]"," | ".join(matches[:8]))
@@ -4415,30 +4405,30 @@ class AssistantApp:
     def _history_up(self, _=None):
         if not self._input_hist: return
         self._input_hist_i = max(0, self._input_hist_i - 1)
-        self.entry.delete(0, tk.END)
+        self.entry.delete(0, "end")
         self.entry.insert(0, self._input_hist[self._input_hist_i])
 
     def _history_down(self, _=None):
         if not self._input_hist: return
         self._input_hist_i = min(len(self._input_hist)-1, self._input_hist_i + 1)
-        self.entry.delete(0, tk.END)
+        self.entry.delete(0, "end")
         self.entry.insert(0, self._input_hist[self._input_hist_i])
 
     # ── CHAT HELPERS ──────────────────────────────────────────────────────────
 
     def _append(self, tag, prefix, message):
-        self.chat.config(state=tk.NORMAL)
+        self.chat.configure(state="normal")
         ts = datetime.now().strftime("%H:%M")
         if prefix:
-            self.chat.insert(tk.END, f"[{ts}] {prefix} ", tag)
-        self.chat.insert(tk.END, message + "\n\n")
-        self.chat.see(tk.END)
-        self.chat.config(state=tk.DISABLED)
+            self.chat.insert("end", f"[{ts}] {prefix} ", tag)
+        self.chat.insert("end", message + "\n\n")
+        self.chat.see("end")
+        self.chat.configure(state="disabled")
 
     def _divider(self):
-        self.chat.config(state=tk.NORMAL)
-        self.chat.insert(tk.END, "─"*54 + "\n", "divider")
-        self.chat.config(state=tk.DISABLED)
+        self.chat.configure(state="normal")
+        self.chat.insert("end", "─"*54 + "\n", "divider")
+        self.chat.configure(state="disabled")
 
     def set_status(self, msg: str):
         self.status_var.set(msg.upper())
@@ -4446,7 +4436,7 @@ class AssistantApp:
     def update_perm_label(self):
         perm = CONFIG.get("permission","standard")
         if hasattr(self, "perm_lbl"):
-            self.perm_lbl.config(text=f"Model: OMG_AI 4.0 ({perm.upper()}) ▾")
+            self.perm_lbl.configure(text=f"Model: OMG_AI 4.0 ({perm.upper()}) ▾")
 
     # ── BOOT SEQUENCE ─────────────────────────────────────────────────────────
 
@@ -4478,8 +4468,8 @@ class AssistantApp:
         self.root.after(0, self.finish_boot)
 
     def finish_boot(self):
-        self.entry.config(state=tk.NORMAL)
-        self.send_btn.config(state=tk.NORMAL)
+        self.entry.configure(state="normal")
+        self.send_btn.configure(state="normal")
         self.entry.focus()
         perm = CONFIG.get("permission","standard")
         self.set_status(f"ONLINE  ◈  {perm.upper()}  ◈  v{CURRENT_VER}  ◈  130+ CMDS")
@@ -4513,7 +4503,7 @@ class AssistantApp:
     def _transition_to_chat(self):
         if getattr(self, "in_chat_state", False) == False:
             self.home_frame.pack_forget()
-            self.chat_frame.pack(fill=tk.BOTH, expand=True)
+            self.chat_frame.pack(fill="both", expand=True)
             self.in_chat_state = True
 
     def handle_input(self, _=None):
@@ -4521,7 +4511,7 @@ class AssistantApp:
         user_input = self.entry.get().strip()
         if not user_input:
             return
-        self.entry.delete(0, tk.END)
+        self.entry.delete(0, "end")
         self._input_hist.append(user_input)
         self._input_hist_i = len(self._input_hist)
 
@@ -4540,8 +4530,8 @@ class AssistantApp:
             return
 
         CHAT_HISTORY.append({"role":"user","content":user_input})
-        self.entry.config(state=tk.DISABLED)
-        self.send_btn.config(state=tk.DISABLED)
+        self.entry.configure(state="disabled")
+        self.send_btn.configure(state="disabled")
         self.set_status("PROCESSING…")
         threading.Thread(target=self.process_chat, daemon=True).start()
 
@@ -4616,25 +4606,25 @@ class AssistantApp:
         self.root.after(0, self._finish_ai_message)
 
     def _prepare_ai_prefix(self):
-        self.chat.config(state=tk.NORMAL)
+        self.chat.configure(state="normal")
         ts = datetime.now().strftime("%H:%M")
-        self.chat.insert(tk.END, f"[{ts}] OMG_AI: ", "ai")
-        self.chat.see(tk.END)
-        self.chat.config(state=tk.DISABLED)
+        self.chat.insert("end", f"[{ts}] OMG_AI: ", "ai")
+        self.chat.see("end")
+        self.chat.configure(state="disabled")
 
     def _stream_token(self, token):
-        self.chat.config(state=tk.NORMAL)
-        self.chat.insert(tk.END, token)
-        self.chat.see(tk.END)
-        self.chat.config(state=tk.DISABLED)
+        self.chat.configure(state="normal")
+        self.chat.insert("end", token)
+        self.chat.see("end")
+        self.chat.configure(state="disabled")
 
     def _finish_ai_message(self):
-        self.chat.config(state=tk.NORMAL)
-        self.chat.insert(tk.END, "\n\n")
-        self.chat.config(state=tk.DISABLED)
+        self.chat.configure(state="normal")
+        self.chat.insert("end", "\n\n")
+        self.chat.configure(state="disabled")
         self._divider()
-        self.entry.config(state=tk.NORMAL)
-        self.send_btn.config(state=tk.NORMAL)
+        self.entry.configure(state="normal")
+        self.send_btn.configure(state="normal")
         self.entry.focus()
         perm = CONFIG.get("permission","standard")
         self.set_status(f"READY  ◈  {perm.upper()}")
@@ -4782,7 +4772,9 @@ def main():
         install_wizard()
         return
 
-    root = tk.Tk()
+    ctk.set_appearance_mode("dark")
+    ctk.set_default_color_theme("dark-blue")
+    root = ctk.CTk()
     app  = AssistantApp(root)
 
     create_tray(app)
