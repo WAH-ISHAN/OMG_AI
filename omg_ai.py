@@ -4481,9 +4481,7 @@ class AssistantApp:
             time.sleep(0.35)
 
         if not check_installation():
-            self.root.after(0, self._append, "warn", "[ERROR]",
-                "Installation incomplete. Run: python omg_ai.py install")
-            self.root.after(0, self.set_status, "NOT INSTALLED")
+            self.root.after(0, self.launch_gui_setup)
             return
 
         self.root.after(0, self.set_status, "LOADING AI ENGINE…")
@@ -4526,6 +4524,31 @@ class AssistantApp:
             target=bg_update_checker,
             args=(lambda msg: self.root.after(0, self._append, "system","[UPDATE]",msg),),
             daemon=True).start()
+
+    def launch_gui_setup(self):
+        self.set_status("NOT INSTALLED")
+        self._append("warn", "[INSTALLATION]", "OMG_AI installation is incomplete. Launching Setup Wizard...")
+        self.setup_win = GUISetupWizard(self.root, on_complete=self.on_setup_completed)
+
+    def on_setup_completed(self):
+        global CODENAME
+        load_config()
+        CODENAME = CONFIG.get("codename", CONFIG.get("username", "Sir"))
+        self.update_perm_label()
+        
+        self._append("system", "[INSTALLATION]", "Setup wizard finished. Initialising systems...")
+        self.set_status("LOADING AI ENGINE…")
+        
+        def continue_boot():
+            ok = start_server()
+            if not ok:
+                self.root.after(0, self._append, "warn","[ERROR]",
+                    "Neural engine failed to start. Check bin/ directory.")
+                self.root.after(0, self.set_status, "ENGINE FAILURE")
+                return
+            self.root.after(0, self.finish_boot)
+            
+        threading.Thread(target=continue_boot, daemon=True).start()
 
     # ── INPUT HANDLING ────────────────────────────────────────────────────────
 
@@ -4660,6 +4683,205 @@ class AssistantApp:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# GUI SETUP WIZARD
+# ──────────────────────────────────────────────────────────────────────────────
+
+class GUISetupWizard(ctk.CTkToplevel):
+    def __init__(self, parent, on_complete):
+        super().__init__(parent)
+        self.parent = parent
+        self.on_complete = on_complete
+        
+        self.title("OMG_AI Setup Wizard")
+        self.geometry("500x550")
+        self.resizable(False, False)
+        self.attributes("-topmost", True)
+        
+        # Color theme matching dark mode
+        self.configure(fg_color="#121212")
+        
+        # Header
+        ctk.CTkLabel(self, text="OMG_AI v4.0  —  SETUP WIZARD", 
+                     font=("Segoe UI", 18, "bold"), text_color="#00FFCC").pack(pady=25)
+                     
+        # Form Container
+        self.form_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.form_frame.pack(fill="both", expand=True, padx=40)
+        
+        # Name
+        ctk.CTkLabel(self.form_frame, text="1. Your Name:", font=("Segoe UI", 12)).pack(anchor="w", pady=(10, 0))
+        self.name_entry = ctk.CTkEntry(self.form_frame, placeholder_text="Enter your name", width=420)
+        self.name_entry.pack(pady=5)
+        
+        # Codename
+        ctk.CTkLabel(self.form_frame, text="2. Codename:", font=("Segoe UI", 12)).pack(anchor="w", pady=(10, 0))
+        self.codename_entry = ctk.CTkEntry(self.form_frame, placeholder_text="Enter your assistant codename (e.g. OMG)", width=420)
+        self.codename_entry.pack(pady=5)
+        
+        # Clearance Level
+        ctk.CTkLabel(self.form_frame, text="3. Clearance Level:", font=("Segoe UI", 12)).pack(anchor="w", pady=(10, 0))
+        self.clearance_combo = ctk.CTkComboBox(self.form_frame, values=["Standard", "Elevated", "Unrestricted"], width=420, state="readonly")
+        self.clearance_combo.set("Standard")
+        self.clearance_combo.pack(pady=5)
+        
+        # Start Button
+        self.start_btn = ctk.CTkButton(self.form_frame, text="Begin Installation", font=("Segoe UI", 14, "bold"),
+                                       fg_color="#10A37F", hover_color="#0e8e6f", width=420, height=42, corner_radius=8,
+                                       command=self.start_installation)
+        self.start_btn.pack(pady=35)
+        
+        # Progress Frame (Hidden initially)
+        self.progress_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.status_lbl = ctk.CTkLabel(self.progress_frame, text="Initializing setup...", font=("Segoe UI", 13), text_color="#ECECEC")
+        self.progress_bar = ctk.CTkProgressBar(self.progress_frame, width=420)
+        
+        # Lift and request focus
+        self.lift()
+        self.focus_force()
+
+    def start_installation(self):
+        self.username = self.name_entry.get().strip() or "Sir"
+        self.codename = self.codename_entry.get().strip() or "OMG"
+        self.clearance = self.clearance_combo.get().lower()
+        
+        # Hide inputs form
+        self.form_frame.pack_forget()
+        
+        # Show progress UI
+        self.title("Installing OMG_AI...")
+        self.progress_frame.pack(fill="both", expand=True, padx=40, pady=60)
+        self.status_lbl.pack(anchor="w", pady=(20, 5))
+        self.progress_bar.pack(fill="x", pady=10)
+        self.progress_bar.set(0.0)
+        
+        # Launch background installation thread
+        threading.Thread(target=self.run_install, daemon=True).start()
+
+    def update_status(self, text, pct=None):
+        def _update():
+            self.status_lbl.configure(text=text)
+            if pct is not None:
+                self.progress_bar.set(pct)
+        self.after(0, _update)
+
+    def run_install(self):
+        # 1. Configuration Setup
+        self.update_status("Configuring system profile...", 0.1)
+        laptop_model = "Unknown"
+        if sys.platform == "win32":
+            try:
+                out = __import__('subprocess').check_output("wmic csproduct get name", shell=True, text=True, creationflags=0x08000000).split("\n")
+                if len(out) > 1 and out[1].strip():
+                    laptop_model = out[1].strip()
+            except Exception: pass
+            
+        CONFIG.update({
+            "username":      self.username,
+            "codename":      self.codename,
+            "laptop_model":  laptop_model,
+            "driver_issues": [],
+            "permission":    self.clearance,
+            "theme":         "dark",
+        })
+        save_config()
+        time.sleep(1)
+        
+        # 2. Deploy Dependencies (with masked names)
+        self.update_status("Deploying interface dependencies...", 0.25)
+        deps = {
+            "pystray": "System Tray Controller",
+            "pillow": "Image Rendering Engine",
+            "keyboard": "System Input Router",
+            "psutil": "Resource Allocation Monitor",
+            "windows-toasts": "Notification Dispatcher"
+        }
+        step_inc = 0.20 / len(deps)
+        current_pct = 0.25
+        for dep, label in deps.items():
+            self.update_status(f"Installing {label}...", current_pct)
+            try:
+                __import__('subprocess').run([sys.executable, "-m", "pip", "install", dep, "-q"], 
+                               capture_output=True, creationflags=0x08000000 if sys.platform=="win32" else 0)
+            except Exception: pass
+            current_pct += step_inc
+            
+        time.sleep(0.5)
+        
+        # 3. Download Llama Engine (with masked status)
+        self.update_status("Deploying Core AI Engine...", 0.45)
+        exe = get_llama_exe()
+        if not os.path.exists(exe):
+            try:
+                req = urllib.request.Request(
+                    "https://api.github.com/repos/ggerganov/llama.cpp/releases/latest",
+                    headers={"Accept":"application/vnd.github+json", "User-Agent": "Mozilla/5.0"}
+                )
+                data = json.loads(urllib.request.urlopen(req).read())
+                url = next(a["browser_download_url"] for a in data["assets"] if "bin-win-cpu-x64.zip" in a["name"])
+                zp = os.path.join(BIN_DIR, "llama.zip")
+                
+                # Progress hook
+                def dl_hook(count, block_size, total_size):
+                    if total_size > 0:
+                        pct = count * block_size / total_size
+                        self.update_status(f"Downloading Core AI Engine: {int(pct*100)}%", 0.45 + (pct * 0.25))
+                        
+                urllib.request.urlretrieve(url, zp, dl_hook)
+                with zipfile.ZipFile(zp) as z:
+                    z.extractall(BIN_DIR)
+                os.remove(zp)
+            except Exception as e:
+                self.error_exit(f"Engine deployment failed: {e}")
+                return
+        else:
+            self.update_status("Core AI Engine already deployed.", 0.70)
+            time.sleep(0.5)
+            
+        # 4. Download Model (with masked status)
+        self.update_status("Loading Neural Modules...", 0.70)
+        model_path = os.path.join(MODELS_DIR, DEFAULT_MODEL)
+        if not os.path.exists(model_path):
+            try:
+                def dl_hook(count, block_size, total_size):
+                    if total_size > 0:
+                        pct = count * block_size / total_size
+                        self.update_status(f"Downloading Neural Modules: {int(pct*100)}%", 0.70 + (pct * 0.25))
+                        
+                urllib.request.urlretrieve(MODEL_URL, model_path, dl_hook)
+            except Exception as e:
+                self.error_exit(f"Neural modules loading failed: {e}")
+                return
+        else:
+            self.update_status("Neural Modules already loaded.", 0.95)
+            time.sleep(0.5)
+            
+        # 5. Registry Startup Configuration
+        self.update_status("Configuring startup sequence...", 0.95)
+        try:
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_SET_VALUE)
+            if getattr(sys, 'frozen', False):
+                winreg.SetValueEx(key, "OMG_AI", 0, winreg.REG_SZ, f'"{sys.executable}"')
+            else:
+                winreg.SetValueEx(key, "OMG_AI", 0, winreg.REG_SZ, f'pythonw "{os.path.abspath(__file__)}"')
+            winreg.CloseKey(key)
+        except Exception: pass
+        
+        self.update_status("Installation complete!", 1.0)
+        time.sleep(1)
+        self.after(0, self.complete_wizard)
+
+    def error_exit(self, err_msg):
+        self.update_status(f"Error: {err_msg}", None)
+        messagebox.showerror("Installation Error", err_msg)
+        self.after(1000, self.destroy)
+
+    def complete_wizard(self):
+        self.destroy()
+        if self.on_complete:
+            self.on_complete()
+
+# ──────────────────────────────────────────────────────────────────────────────
 # INSTALL WIZARD
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -4724,14 +4946,20 @@ def install_wizard():
     print(f"\033[92m◈ Identity confirmed: {codename}  (clearance: {perm})\033[0m")
 
     print("\n6. Installing dependencies…")
-    deps = ["pystray","pillow","keyboard","psutil","windows-toasts"]
-    for dep in deps:
+    deps = {
+        "pystray": "System Tray Controller",
+        "pillow": "Image Rendering Engine",
+        "keyboard": "System Input Router",
+        "psutil": "Resource Allocation Monitor",
+        "windows-toasts": "Notification Dispatcher"
+    }
+    for dep, label in deps.items():
         try:
             __import__('subprocess').run([sys.executable,"-m","pip","install",dep,"-q"],
                            capture_output=True)
-            print(f"\033[92m  ◈ {dep}\033[0m")
+            print(f"\033[92m  ◈ {label}\033[0m")
         except Exception as e:
-            print(f"\033[93m  ⚠ {dep}: {e}\033[0m")
+            print(f"\033[93m  ⚠ {label}: {e}\033[0m")
 
     print("\n7. Acquiring AI engine…")
     exe = get_llama_exe()
